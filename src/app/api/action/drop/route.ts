@@ -35,7 +35,7 @@ export async function POST(request: Request) {
     // ลดจากกระเป๋า
     const newInventory = [...inventory]
     newInventory[itemIdx] = { ...newInventory[itemIdx], qty: newInventory[itemIdx].qty - qty }
-    await supabase.from('players')
+    await (supabase as any).from('players')
       .update({ inventory: newInventory.filter(i => i.qty > 0) })
       .eq('id', player.id)
 
@@ -67,11 +67,11 @@ export async function POST(request: Request) {
     }
 
     if (gs) {
-      await supabase.from('grid_states')
+      await (supabase as any).from('grid_states')
         .update({ dropped_items: newDrops })
         .eq('game_id', game_id).eq('x', player.pos_x).eq('y', player.pos_y)
     } else {
-      await supabase.from('grid_states')
+      await (supabase as any).from('grid_states')
         .insert({ game_id, x: player.pos_x, y: player.pos_y, items: [], dropped_items: newDrops })
     }
 

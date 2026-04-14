@@ -1444,7 +1444,7 @@ function ZoneDeclare({ gameId, onDeclare, notify }: {
   useEffect(() => {
     (supabase as any).from('grid_states').select('x,y,warn_forbidden,is_forbidden')
       .eq('game_id', gameId).or('warn_forbidden.eq.true,is_forbidden.eq.true')
-      .then(({ data }) => {
+      .then(({ data }: { data: any }) => {
         if (!data) return
         setWarnedZones(data.filter((d: any) => d.warn_forbidden && !d.is_forbidden))
         setForbiddenZones(data.filter((d: any) => d.is_forbidden))

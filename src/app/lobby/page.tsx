@@ -18,8 +18,8 @@ export default async function LobbyPage() {
   if (activeGame) {
     // query ตรง ไม่ดึงทั้งหมด
     const [{ data: me }, { data: allPlayers }] = await Promise.all([
-      supabase.from('players').select('id').eq('game_id', activeGame.id).eq('user_id', user.id).maybeSingle(),
-      supabase.from('players').select('id').eq('game_id', activeGame.id),
+     (supabase as any).from('players').select('id').eq('game_id', activeGame.id).eq('user_id', user.id).maybeSingle(),
+     (supabase as any).from('players').select('id').eq('game_id', activeGame.id),
     ])
 
     if (me) redirect('/game')
@@ -55,7 +55,7 @@ export default async function LobbyPage() {
 
   if (!game) return <LobbyClient game={null} players={[]} userId={user.id} myPlayer={null} />
 
-  const { data: players } = await supabase.from('players').select('*').eq('game_id', game.id)
+  const { data: players } = await (supabase as any).from('players').select('*').eq('game_id', game.id)
   const myPlayer = players?.find(p => p.user_id === user.id) ?? null
   if (!myPlayer) redirect('/create-character')
 

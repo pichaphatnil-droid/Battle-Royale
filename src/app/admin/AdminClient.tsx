@@ -53,7 +53,7 @@ export default function AdminClient({ currentUserId, games, players, items: init
   }
 
   async function startGame(id: string, endsAt: string) {
-    const { error: rpcError } = await supabase.rpc('เริ่มเกมใหม่', { game_id: id })
+    const { error: rpcError } = await (supabase as any).rpc('เริ่มเกมใหม่', { game_id: id })
     if (rpcError) { notify('❌ ' + rpcError.message, false); return }
     // อัปเดตเวลาจบ
     const { error } = await supabase.from('games').update({ ends_at: endsAt }).eq('id', id)

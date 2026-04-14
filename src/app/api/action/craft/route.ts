@@ -76,7 +76,7 @@ export async function POST(request: Request) {
       : [...knownRecipes, recipe_id]
 
     // อัปเดต player
-    await supabase.from('players').update({
+    await (supabase as any).from('players').update({
       inventory: newInventory,
       known_recipes: newKnown,
     }).eq('id', player.id)

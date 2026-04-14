@@ -56,13 +56,13 @@ export default function AdminClient({ currentUserId, games, players, items: init
     const { error: rpcError } = await (supabase as any).rpc('เริ่มเกมใหม่', { game_id: id })
     if (rpcError) { notify('❌ ' + rpcError.message, false); return }
     // อัปเดตเวลาจบ
-    const { error } = await supabase.from('games').update({ ends_at: endsAt }).eq('id', id)
+    const { error } = await (supabase as any).from('games').update({ ends_at: endsAt }).eq('id', id)
     if (error) notify('❌ ' + error.message, false)
     else { notify('✅ เริ่มเกมแล้ว'); reload() }
   }
 
   async function pauseGame(id: string, isPaused: boolean) {
-    const { error } = await supabase.from('games').update({
+    const { error } = await (supabase as any).from('games').update({
       status: isPaused ? 'กำลังเล่น' : 'หยุดชั่วคราว',
       paused_at: isPaused ? null : new Date().toISOString(),
     }).eq('id', id)
@@ -72,7 +72,7 @@ export default function AdminClient({ currentUserId, games, players, items: init
 
   async function endGame(id: string) {
     if (!confirm('ยืนยันจบเกม?')) return
-    const { error } = await supabase.from('games').update({ status: 'จบแล้ว' }).eq('id', id)
+    const { error } = await (supabase as any).from('games').update({ status: 'จบแล้ว' }).eq('id', id)
     if (error) notify('❌ ' + error.message, false)
     else { notify('✅ จบเกมแล้ว'); reload() }
   }
@@ -92,7 +92,7 @@ export default function AdminClient({ currentUserId, games, players, items: init
     // ลบ grid_states
     await supabase.from('grid_states').delete().eq('game_id', gameId)
     // ลบ game
-    const { error: e3 } = await supabase.from('games').delete().eq('id', gameId)
+    const { error: e3 } = await (supabase as any).from('games').delete().eq('id', gameId)
     if (e3) { notify('❌ ลบเกมไม่ได้: ' + e3.message, false); return }
     notify('✅ ลบเกมแล้ว')
     reload()

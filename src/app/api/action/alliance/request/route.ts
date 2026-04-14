@@ -33,11 +33,11 @@ export async function POST(request: Request) {
     // ตรวจระยะมองเห็น — ต้องเห็นสมาชิกอย่างน้อย 1 คนในกลุ่ม
     const { data: fromGrid } = await (supabase as any).from('grids').select('visibility').eq('x', player.pos_x).eq('y', player.pos_y).maybeSingle()
     const fromVis = fromGrid?.visibility ?? 2
-    const fromCells = new Set(cellsInRange(player.pos_x, player.pos_y, fromVis).map(c => `${c.x},${c.y}`))
+    const fromCells = new Set(cellsInRange(player.pos_x ?? 0, player.pos_y ?? 0, fromVis).map(c => `${c.x},${c.y}`))
 
     const members = alliance.members as string[]
     const { data: memberPlayers } = await (supabase as any).from('players').select('pos_x,pos_y').in('id', members)
-    const canSeeAny = memberPlayers?.some(m => fromCells.has(`${m.pos_x},${m.pos_y}`))
+    const canSeeAny = memberPlayers?.some((m: any) => fromCells.has(`${m.pos_x},${m.pos_y}`))
     if (!canSeeAny) return NextResponse.json({ error: 'ต้องอยู่ในระยะมองเห็นสมาชิกกลุ่มอย่างน้อย 1 คน' }, { status: 400 })
 
     // ลบ request เก่า (ถ้ามี)

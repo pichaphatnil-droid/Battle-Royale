@@ -4,11 +4,11 @@ import CreateCharacterClient from './CreateCharacterClient'
 
 export default async function CreateCharacterPage() {
   const supabase = await createClient()
+  const sb = supabase as any
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: game } = await supabase
-    .from('games')
+  const { data: game } = await sb.from('games')
     .select('*')
     .eq('status', 'รอผู้เล่น')
     .limit(1)
@@ -16,27 +16,24 @@ export default async function CreateCharacterPage() {
 
   if (!game) redirect('/lobby')
 
-  const { data: allPlayers } = await supabase
-    .from('players')
+  const { data: allPlayers } = await sb.from('players')
     .select('*')
     .eq('game_id', game.id)
 
-  const existing = allPlayers?.find(p => p.user_id === user.id)
+  const existing = allPlayers?.find((p: any) => p.user_id === user.id)
   if (existing) redirect('/lobby')
 
-  const { data: traits } = await supabase
-    .from('trait_definitions')
+  const { data: traits } = await sb.from('trait_definitions')
     .select('*')
 
   // ดึงอาวุธทั้งหมดสำหรับสุ่มให้ผู้เล่น
-  const { data: weapons } = await supabase
-    .from('item_definitions')
+  const { data: weapons } = await sb.from('item_definitions')
     .select('*')
     .eq('category', 'อาวุธ')
 
-  const activeTraits = traits?.filter(t => t.is_active) ?? []
-  const usedMaleNumbers = allPlayers?.filter(p => p.gender === 'ชาย').map(p => p.student_number) ?? []
-  const usedFemaleNumbers = allPlayers?.filter(p => p.gender === 'หญิง').map(p => p.student_number) ?? []
+  const activeTraits = traits?.filter((t: any) => t.is_active) ?? []
+  const usedMaleNumbers = allPlayers?.filter((p: any) => p.gender === 'ชาย').map((p: any) => p.student_number) ?? []
+  const usedFemaleNumbers = allPlayers?.filter((p: any) => p.gender === 'หญิง').map((p: any) => p.student_number) ?? []
 
   const availableMaleNumbers = Array.from({ length: 15 }, (_, i) => i + 1).filter(n => !usedMaleNumbers.includes(n))
   const availableFemaleNumbers = Array.from({ length: 15 }, (_, i) => i + 1).filter(n => !usedFemaleNumbers.includes(n))
@@ -45,7 +42,7 @@ export default async function CreateCharacterPage() {
   const allPositions = Array.from({ length: 30 }, (_, x) =>
     Array.from({ length: 30 }, (_, y) => ({ x, y }))
   ).flat()
-  const usedPositions = new Set(allPlayers?.map(p => `${p.pos_x},${p.pos_y}`) ?? [])
+  const usedPositions = new Set(allPlayers?.map((p: any) => `${p.pos_x},${p.pos_y}`) ?? [])
   const freePositions = allPositions.filter(p => !usedPositions.has(`${p.x},${p.y}`))
   const shuffled = freePositions.sort(() => Math.random() - 0.5)
   const startPos = shuffled[0] ?? { x: 10, y: 10 }

@@ -8,7 +8,7 @@ export default async function LobbyPage() {
   if (!user) redirect('/login')
 
   // ถ้ามีเกมกำลังเล่น
-  const { data: activeGame } = await supabase
+  const { data: activeGame } = await (supabase as any)
     .from('games')
     .select('*')
     .in('status', ['กำลังเล่น', 'หยุดชั่วคราว'])
@@ -50,13 +50,12 @@ export default async function LobbyPage() {
   }
 
   // รอผู้เล่น
-  const { data: game } = await supabase
-    .from('games').select('*').eq('status', 'รอผู้เล่น').limit(1).maybeSingle()
+  const { data: game } = await (supabase as any).from('games').select('*').eq('status', 'รอผู้เล่น').limit(1).maybeSingle()
 
   if (!game) return <LobbyClient game={null} players={[]} userId={user.id} myPlayer={null} />
 
   const { data: players } = await (supabase as any).from('players').select('*').eq('game_id', game.id)
-  const myPlayer = players?.find(p => p.user_id === user.id) ?? null
+  const myPlayer = players?.find((p: any) => p.user_id === user.id) ?? null
   if (!myPlayer) redirect('/create-character')
 
   return <LobbyClient game={game} players={players ?? []} userId={user.id} myPlayer={myPlayer} />

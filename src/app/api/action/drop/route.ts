@@ -40,7 +40,7 @@ export async function POST(request: Request) {
       .eq('id', player.id)
 
     // วางลง dropped_items
-    const { data: gs } = await supabase
+    const { data: gs } = await (supabase as any)
       .from('grid_states').select('*')
       .eq('game_id', game_id).eq('x', player.pos_x).eq('y', player.pos_y)
       .maybeSingle()

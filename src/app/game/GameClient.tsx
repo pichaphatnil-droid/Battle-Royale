@@ -87,7 +87,7 @@ export default function GameClient({
     setThirst(calculateCurrentThirst(myPlayer.thirst ?? 100, myPlayer.thirst_updated_at ?? new Date().toISOString(), myPlayer.traits ?? []))
 
     // โหลดประกาศล่าสุด 5 รายการ กรอง dismissed
-    supabase.from('announcements').select('*')
+    void (supabase as any).from('announcements').select('*')
       .eq('game_id', game.id)
       .or(`target_id.is.null,target_id.eq.${myPlayer.id}`)
       .order('occurred_at', { ascending: false })
@@ -97,11 +97,11 @@ export default function GameClient({
         const key = `dismissed_ann_${game.id}`
         const dismissed: string[] = JSON.parse(localStorage.getItem(key) ?? '[]')
         setAnnouncements(data)
-        setToastAnns(data.filter(a => !dismissed.includes(a.id)))
+        setToastAnns(data.filter((a: any) => !dismissed.includes(a.id)))
       })
 
     // โหลด pending invites ที่ยังไม่หมดอายุ
-    supabase.from('alliance_invites').select('*, from_player:from_player_id(name)')
+    (supabase as any).from('alliance_invites').select('*, from_player:from_player_id(name)')
       .eq('to_player_id', myPlayer.id)
       .eq('game_id', game.id)
       .gt('expires_at', new Date().toISOString())
@@ -153,7 +153,7 @@ export default function GameClient({
       }, (payload: any) => {
         const row = payload.new || payload.old
         if (row?.game_id !== game.id) return
-        supabase.from('players').select('*').eq('game_id', game.id)
+        (supabase as any).from('players').select('*').eq('game_id', game.id)
           .then(({ data }: { data: any }) => {
             if (!data) return
             setAllPlayers(data)
@@ -199,7 +199,7 @@ export default function GameClient({
       }, (payload: any) => {
         const row = payload.new || payload.old
         if (row?.game_id !== game.id) return
-        supabase.from('grid_states').select('*').eq('game_id', game.id)
+        (supabase as any).from('grid_states').select('*').eq('game_id', game.id)
           .then(({ data }: { data: any }) => { if (data) setGridStates(data) })
       })
       .on('postgres_changes', {
@@ -209,7 +209,7 @@ export default function GameClient({
         const g = payload.new as Game
         if (g?.id !== game.id) return
         if (g.status === 'จบแล้ว') {
-          supabase.from('events')
+          (supabase as any).from('events')
             .select('data')
             .eq('game_id', game.id)
             .eq('event_type', 'ชนะ')
@@ -250,12 +250,12 @@ export default function GameClient({
         event: 'INSERT', schema: 'public', table: 'alliance_invites',
         filter: `to_player_id=eq.${myPlayer.id}`,
       }, (payload: any) => {
-        const inv = payload.new
-        supabase.from('players').select('name').eq('id', inv.from_player_id).single()
+        const invData: any = payload.new
+        void (supabase as any).from('players').select('name').eq('id', invData.from_player_id).single()
           .then(({ data }: { data: any }) => {
             setPendingInvites(prev => {
-              if (prev.some(p => p.id === inv.id)) return prev
-              return [...prev, { ...inv, from_player: { name: data?.name ?? '?' } }]
+              if (prev.some((p: any) => p.id === invData.id)) return prev
+              return [...prev, { ...invData, from_player: { name: data?.name ?? '?' } }]
             })
           })
       })
@@ -304,7 +304,7 @@ export default function GameClient({
 
   const visibleCells = useMemo(() => {
     if (myPlayer.pos_x === null) return new Set<string>()
-    return new Set(cellsInRange(myPlayer.pos_x, myPlayer.pos_y, visRange).map(c => `${c.x},${c.y}`))
+    return new Set(cellsInRange(myPlayer.pos_x ?? 0, myPlayer.pos_y ?? 0, visRange).map(c => `${c.x},${c.y}`))
   }, [myPlayer.pos_x, myPlayer.pos_y, visRange])
 
   const allyIds = useMemo(
@@ -363,7 +363,7 @@ export default function GameClient({
     const data = await res.json()
     if (!data.ok) { notify(data.error, false); return }
     // อัปเดต alliance state
-    const { data: alliance } = await supabase.from('alliances').select('*').eq('id', data.alliance_id).single()
+    const { data: alliance } = await (supabase as any).from('alliances').select('*').eq('id', data.alliance_id).single()
     if (alliance) setMyAlliance(alliance)
     setMyPlayer(prev => ({ ...prev, alliance_id: data.alliance_id }))
     setPendingInvites(prev => prev.filter(i => i.id !== invite_id))
@@ -371,7 +371,7 @@ export default function GameClient({
   }
 
   async function doDeclineInvite(invite_id: string) {
-    await supabase.from('alliance_invites').delete().eq('id', invite_id)
+    await (supabase as any).from('alliance_invites').delete().eq('id', invite_id)
     setPendingInvites(prev => prev.filter(i => i.id !== invite_id))
     notify('ปฏิเสธคำชวนแล้ว')
   }
@@ -554,7 +554,7 @@ export default function GameClient({
     setChatMsg('')
 
     // insert DB — postgres_changes จะ trigger ChatMessages realtime
-    await supabase.from('chat_messages').insert({
+    await (supabase as any).from('chat_messages').insert({
       game_id: game.id,
       player_id: myPlayer.id,
       channel: chatTab,
@@ -656,8 +656,8 @@ export default function GameClient({
                       </div>
                       <div style={{ fontSize:'10px', color:'var(--text-secondary)' }}>
                         คริต {crit}% | ระยะ {range} ช่อง
-                        {(def?.data as any)?.bleed_chance ? ` | เลือดออก ${(def.data as any).bleed_chance}%` : ''}
-                        {(def?.data as any)?.stun_chance ? ` | มึนงง ${(def.data as any).stun_chance}%` : ''}
+                        {(def?.data as any)?.bleed_chance ? ` | เลือดออก ${(def?.data as any).bleed_chance}%` : ''}
+                        {(def?.data as any)?.stun_chance ? ` | มึนงง ${(def?.data as any).stun_chance}%` : ''}
                       </div>
                     </div>
                   )
@@ -1125,7 +1125,7 @@ export default function GameClient({
                       {/* เดินไป */}
                       {myPlayer.pos_x !== null && (
                         Math.abs(myPlayer.pos_x - selectedCell.x) <= 1 &&
-                        Math.abs(myPlayer.pos_y - selectedCell.y) <= 1 &&
+                        Math.abs((myPlayer.pos_y ?? 0) - selectedCell.y) <= 1 &&
                         (selectedCell.x !== myPlayer.pos_x || selectedCell.y !== myPlayer.pos_y)
                       ) && (() => {
                         const isSwamp = grid?.terrain === 'หนองน้ำ'
@@ -1140,7 +1140,7 @@ export default function GameClient({
                         const moodleBonus = (myPlayer.moodles ?? []).reduce((sum: number, m: any) => {
                           const def = moodleDefs.find(d => d.id === m.id)
                           const level = m.level ?? 1
-                          const fx = def?.level_effects?.find((e: any) => e['ระดับ'] === level)
+                          const fx = def?.level_effects?.find((e: any) => e['ระดับ'] === level) as any
                           return sum + (fx?.['ผล']?.ap_cost_bonus ?? 0)
                         }, 0)
                         moveCost += moodleBonus
@@ -1180,7 +1180,7 @@ export default function GameClient({
                           const otherHasAlliance = other.alliance_id
                           return (
                             <button key={`invite-${other.id}`}
-                              onClick={() => otherHasAlliance ? doRequestJoin(other.alliance_id) : doInvite(other.id)}
+                              onClick={() => otherHasAlliance ? doRequestJoin(other.alliance_id!) : doInvite(other.id)}
                               style={{ ...s.actionBtn, background:'rgba(0,60,0,0.5)', border:'1px solid var(--green-bright)', color:'var(--green-bright)' }}>
                               {otherHasAlliance ? `📨 ขอเข้าร่วมกลุ่ม ${other.name}` : `🤝 ชวน ${other.name} รวมกลุ่ม`}
                             </button>
@@ -1778,7 +1778,7 @@ function PlayerPanel({ myPlayer, ap, hunger, thirst, hpClass, hpPct, traits, moo
                 color, background: 'var(--bg-tertiary)', fontSize: '11px',
               }}>
                 {def?.icon_url && (
-                  <img src={def.icon_url} alt="" style={{ width: '14px', height: '14px', objectFit: 'contain', flexShrink: 0 }} />
+                  <img src={def?.icon_url} alt="" style={{ width: '14px', height: '14px', objectFit: 'contain', flexShrink: 0 }} />
                 )}
                 {m.id}{expires}
               </span>
@@ -1881,17 +1881,17 @@ function PlayerPanel({ myPlayer, ap, hunger, thirst, hpClass, hpPct, traits, moo
                         {def?.weight ? <span style={{ fontSize:'10px', color:'var(--text-secondary)' }}>{def.weight} กก.</span> : null}
                         {isWeapon && def?.data && (
                           <span style={{ fontSize:'10px', color:'var(--text-secondary)', fontFamily:'var(--font-mono)' }}>
-                            DMG {def.data.damage} | คริต {def.data.crit_chance}%
+                            DMG {String(def.data.damage ?? "")} | คริต {String(def.data.crit_chance ?? "")}%
                           </span>
                         )}
                         {!isWeapon && def?.data && (
                           <>
-                            {!!def.data.hp && <span style={{ fontSize:'10px', color:'var(--green-bright)', fontFamily:'var(--font-mono)' }}>HP +{def.data.hp}</span>}
-                            {!!def.data.hunger && <span style={{ fontSize:'10px', color:'#8B6914', fontFamily:'var(--font-mono)' }}>🍖 +{def.data.hunger}</span>}
-                            {!!def.data.thirst && <span style={{ fontSize:'10px', color:'#2A5A8A', fontFamily:'var(--font-mono)' }}>💧 +{def.data.thirst}</span>}
-                            {!!def.data.ap_bonus && <span style={{ fontSize:'10px', color:'var(--blue-ap)', fontFamily:'var(--font-mono)' }}>⚡ +{def.data.ap_bonus}</span>}
-                            {def.data.removes_moodle && <span style={{ fontSize:'10px', color:'var(--text-secondary)' }}>รักษา{def.data.removes_moodle}</span>}
-                            {(def.data.ap_cost as number) > 0 && <span style={{ fontSize:'10px', color:'var(--blue-ap)', fontFamily:'var(--font-mono)' }}>AP {def.data.ap_cost}</span>}
+                            {!!def.data.hp && <span style={{ fontSize:'10px', color:'var(--green-bright)', fontFamily:'var(--font-mono)' }}>HP +{String(def.data.hp ?? "")}</span>}
+                            {!!def.data.hunger && <span style={{ fontSize:'10px', color:'#8B6914', fontFamily:'var(--font-mono)' }}>🍖 +{String(def.data.hunger ?? "")}</span>}
+                            {!!def.data.thirst && <span style={{ fontSize:'10px', color:'#2A5A8A', fontFamily:'var(--font-mono)' }}>💧 +{String(def.data.thirst ?? "")}</span>}
+                            {!!def.data.ap_bonus && <span style={{ fontSize:'10px', color:'var(--blue-ap)', fontFamily:'var(--font-mono)' }}>⚡ +{String(def.data.ap_bonus ?? "")}</span>}
+                            {def.data.removes_moodle && <span style={{ fontSize:'10px', color:'var(--text-secondary)' }}>รักษา{String(def.data.removes_moodle ?? "")}</span>}
+                            {(def.data.ap_cost as number) > 0 && <span style={{ fontSize:'10px', color:'var(--blue-ap)', fontFamily:'var(--font-mono)' }}>AP {String(def.data.ap_cost ?? "")}</span>}
                           </>
                         )}
                       </div>
@@ -1935,7 +1935,7 @@ function PlayerPanel({ myPlayer, ap, hunger, thirst, hpClass, hpPct, traits, moo
                   borderColor, color, background: 'var(--bg-tertiary)',
                 }}>
                   {def?.icon_url && (
-                    <img src={def.icon_url} alt="" style={{ width: '16px', height: '16px', objectFit: 'contain', flexShrink: 0 }} />
+                    <img src={def?.icon_url} alt="" style={{ width: '16px', height: '16px', objectFit: 'contain', flexShrink: 0 }} />
                   )}
                   {traitId}
                 </span>
@@ -2095,14 +2095,14 @@ function ChatMessages({ gameId, myPlayer, tab, allPlayers, myAlliance }: {
   useEffect(() => {
     setMessages([]) // ล้างก่อนโหลดใหม่เมื่อ tab เปลี่ยน
 
-    let q = supabase.from('chat_messages').select('*')
+    let q = (supabase as any).from('chat_messages').select('*')
       .eq('game_id', gameId)
       .eq('channel', tab)
       .order('sent_at', { ascending: true })
       .limit(50)
 
     if (tab === 'พื้นที่' && myPlayer.pos_x !== null) {
-      q = q.eq('pos_x', myPlayer.pos_x).eq('pos_y', myPlayer.pos_y)
+      q = q.eq('pos_x', myPlayer.pos_x).eq('pos_y', myPlayer.pos_y ?? 0)
     }
     if (tab === 'พันธมิตร' && myAlliance) {
       q = q.eq('alliance_id', myAlliance.id)

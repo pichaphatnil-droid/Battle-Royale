@@ -73,7 +73,7 @@ export async function POST(request: Request) {
       if (died) {
         const deadInventory: Array<{id:string,qty:number}> = player.inventory ?? []
         if (deadInventory.length > 0) {
-          const { data: gs } = await supabase
+          const { data: gs } = await (supabase as any)
             .from('grid_states').select('*')
             .eq('game_id', game_id).eq('x', x).eq('y', y).maybeSingle()
           const expiresAt = new Date(Date.now() + 60 * 60_000).toISOString()

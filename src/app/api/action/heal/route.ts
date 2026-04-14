@@ -20,7 +20,7 @@ export async function POST(request: Request) {
     if (!player) return NextResponse.json({ error }, { status: 400 })
 
     // ดึง item definition จาก DB
-    const { data: itemDef } = await supabase
+    const { data: itemDef } = await (supabase as any)
       .from('item_definitions')
       .select('*')
       .eq('id', item_id)
@@ -140,7 +140,7 @@ export async function POST(request: Request) {
     }
 
     // ดึง moodleDefs ครั้งเดียว เพื่อส่งเข้า applyStatThresholdMoodles ไม่ต้อง query ซ้ำ
-    const { data: moodleDefs } = await supabase
+    const { data: moodleDefs } = await (supabase as any)
       .from('moodle_definitions')
       .select('id, trigger, max_level')
       .eq('is_active', true)

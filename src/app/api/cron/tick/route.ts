@@ -17,20 +17,20 @@ export async function POST(request: Request) {
 
   try {
     // ── ดึงเกมที่กำลังเล่น ────────────────────────────────────
-    const { data: games } = await supabase
+    const { data: games } = await (supabase as any)
       .from('games')
       .select('id')
       .eq('status', 'กำลังเล่น')
 
     // ── ดึง moodle_definitions ที่มี level_effects มีผล HP ──
     // ใช้ครั้งเดียวนอก loop เพื่อประหยัด query
-    const { data: moodleDefs } = await supabase
+    const { data: moodleDefs } = await (supabase as any)
       .from('moodle_definitions')
       .select('id, level_effects, trigger')
       .eq('is_active', true)
 
     for (const game of games ?? []) {
-      const { data: players } = await supabase
+      const { data: players } = await (supabase as any)
         .from('players')
         .select('*')
         .eq('game_id', game.id)
@@ -57,7 +57,7 @@ export async function POST(request: Request) {
         // คำนวณ moodle ท้องเสีย thirst multiplier
         const currentMoodles: any[] = player.moodles ?? []
         const thirstMult = currentMoodles.reduce((mult: number, m: any) => {
-          const def = moodleDefs?.find(d => d.id === m.id)
+          const def = moodleDefs?.find((d: any) => d.id === m.id)
           const level = m.level ?? 1
           const fx = def?.level_effects?.find((e: any) => e['ระดับ'] === level)
           const tm = fx?.['ผล']?.thirst_rate_multiplier ?? 1
@@ -91,7 +91,7 @@ export async function POST(request: Request) {
         // อ่านจาก DB ไม่ hardcode — ดึง "พลังชีวิตต่อนาที" จาก level_effects
         let hpDropPerMin = 0
         for (const m of newMoodles) {
-          const def = moodleDefs?.find(d => d.id === m.id)
+          const def = moodleDefs?.find((d: any) => d.id === m.id)
           if (!def) continue
           const level = m.level ?? 1
           const fx = def.level_effects?.find((e: any) => e['ระดับ'] === level)
@@ -112,7 +112,7 @@ export async function POST(request: Request) {
         if (newHp <= 0) {
           updates.is_alive = false
           updates.hp = 0
-          await supabase.from('events').insert({
+          await (supabase as any).from('events').insert({
             game_id: game.id,
             event_type: 'ตาย',
             actor_id: null,
@@ -123,7 +123,7 @@ export async function POST(request: Request) {
           })
         }
 
-        await supabase.from('players').update(updates).eq('id', player.id)
+        await (supabase as any).from('players').update(updates).eq('id', player.id)
       }
 
       // ── ตรวจ winner หลัง update ทุกคนแล้ว ───────────────────
@@ -135,19 +135,19 @@ export async function POST(request: Request) {
     results.respawn = respawnError ? `error: ${respawnError.message}` : 'ok'
 
     // ── ลบของทิ้งที่หมดอายุ (เฉพาะเกมที่กำลังเล่น) ──────────────
-    const activeGameIds = (games ?? []).map(g => g.id)
+    const activeGameIds = (games ?? []).map((g: any) => g.id)
     if (activeGameIds.length > 0) {
-      const { data: allGs } = await supabase
+      const { data: allGs } = await (supabase as any)
         .from('grid_states').select('id, dropped_items')
         .in('game_id', activeGameIds)
       let cleanedCount = 0
-      for (const gs of allGs ?? []) {
-        const drops: any[] = gs.dropped_items ?? []
+      for (const gs of (allGs ?? []) as any[]) {
+        const drops: any[] = (gs as any).dropped_items ?? []
         const validDrops = drops.filter((d: any) =>
           !d.expires_at || new Date(d.expires_at).getTime() > Date.now()
         )
         if (validDrops.length !== drops.length) {
-          await supabase.from('grid_states')
+          await (supabase as any).from('grid_states')
             .update({ dropped_items: validDrops }).eq('id', gs.id)
           cleanedCount += drops.length - validDrops.length
         }
@@ -158,19 +158,19 @@ export async function POST(request: Request) {
     }
 
     // ── ทรยศ ──────────────────────────────────────────────────
-    const { data: betrayals } = await supabase
+    const { data: betrayals } = await (supabase as any)
       .from('betrayal_queue')
       .select('*, alliances(*)')
       .lte('takes_effect_at', new Date().toISOString())
 
     for (const b of betrayals ?? []) {
-      await supabase.from('alliances')
+      await (supabase as any).from('alliances')
         .update({ disbanded_at: new Date().toISOString() })
         .eq('id', b.alliance_id)
-      await supabase.from('betrayal_queue').delete().eq('id', b.id)
+      await (supabase as any).from('betrayal_queue').delete().eq('id', b.id)
       const alliance = b.alliances as { game_id: string } | null
       if (alliance) {
-        await supabase.from('events').insert({
+        await (supabase as any).from('events').insert({
           game_id: alliance.game_id,
           event_type: 'ทรยศ',
           actor_id: b.betrayer_id,

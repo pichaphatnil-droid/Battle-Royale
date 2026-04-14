@@ -14,7 +14,7 @@ export async function POST(request: Request) {
     const { game_id, ann_type, message, target_id } = await request.json()
     if (!game_id || !message) return NextResponse.json({ error: 'ข้อมูลไม่ครบ' }, { status: 400 })
 
-    const { error } = await supabase.from('announcements').insert({
+    const { error } = await (supabase as any).from('announcements').insert({
       game_id, ann_type, message,
       target_id: target_id || null,
       sender_id: user.id,

@@ -29,8 +29,8 @@ export async function POST(request: Request) {
     const { data: toGrid } = await (supabase as any).from('grids').select('visibility').eq('x', target.pos_x).eq('y', target.pos_y).maybeSingle()
     const fromVis = fromGrid?.visibility ?? 2
     const toVis = toGrid?.visibility ?? 2
-    const fromCells = new Set(cellsInRange(player.pos_x, player.pos_y, fromVis).map(c => `${c.x},${c.y}`))
-    const toCells = new Set(cellsInRange(target.pos_x, target.pos_y, toVis).map(c => `${c.x},${c.y}`))
+    const fromCells = new Set(cellsInRange(player.pos_x ?? 0, player.pos_y ?? 0, fromVis).map(c => `${c.x},${c.y}`))
+    const toCells = new Set(cellsInRange(target.pos_x ?? 0, target.pos_y ?? 0, toVis).map(c => `${c.x},${c.y}`))
     if (!fromCells.has(`${target.pos_x},${target.pos_y}`) || !toCells.has(`${player.pos_x},${player.pos_y}`))
       return NextResponse.json({ error: 'ต้องอยู่ในระยะที่มองเห็นกันทั้งคู่' }, { status: 400 })
 

@@ -28,7 +28,7 @@ export async function POST(request: Request) {
     const { player: attacker, error } = await getValidPlayer(supabase, user.id, game_id)
     if (!attacker) return NextResponse.json({ error }, { status: 400 })
 
-    const { data: allTargets } = await supabase
+    const { data: allTargets } = await (supabase as any)
       .from('players')
       .select('*')
       .eq('id', target_player_id)
@@ -49,7 +49,7 @@ export async function POST(request: Request) {
       const weapon = attacker.inventory.find((i: any) => i.id === weapon_id)
       if (!weapon) return NextResponse.json({ error: 'ไม่มีอาวุธนี้ในกระเป๋า' }, { status: 400 })
 
-      const { data: weaponDef } = await supabase
+      const { data: weaponDef } = await (supabase as any)
         .from('item_definitions')
         .select('*')
         .eq('id', weapon_id)
@@ -100,7 +100,7 @@ export async function POST(request: Request) {
     let totalDefense = 0
     if (targetInventory.length > 0) {
       const itemIds = targetInventory.map((i: any) => i.id)
-      const { data: defItems } = await supabase
+      const { data: defItems } = await (supabase as any)
         .from('item_definitions').select('id,data')
         .in('id', itemIds)
       if (defItems) {
@@ -159,7 +159,7 @@ export async function POST(request: Request) {
       // drop inventory ของผู้ตายลงพื้น
       const deadInventory: Array<{id:string,qty:number}> = target.inventory ?? []
       if (deadInventory.length > 0 && target.pos_x !== null && target.pos_y !== null) {
-        const { data: gs } = await supabase
+        const { data: gs } = await (supabase as any)
           .from('grid_states').select('*')
           .eq('game_id', game_id).eq('x', target.pos_x).eq('y', target.pos_y)
           .maybeSingle()

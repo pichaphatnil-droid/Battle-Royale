@@ -20,7 +20,7 @@ export async function POST(request: Request) {
     if (!player) return NextResponse.json({ error }, { status: 400 })
 
     // ดึงสูตร
-    const { data: recipe } = await supabase
+    const { data: recipe } = await (supabase as any)
       .from('craft_recipes')
       .select('*')
       .eq('id', recipe_id)

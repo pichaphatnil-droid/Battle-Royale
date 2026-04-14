@@ -33,7 +33,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'ไม่ได้อยู่บนแผนที่' }, { status: 400 })
 
     // ตรวจ cooldown per-player per-cell จาก searched_by array ใน grid_states
-    const { data: gs } = await supabase
+    const { data: gs } = await (supabase as any)
       .from('grid_states')
       .select('*')
       .eq('game_id', game_id)
@@ -55,7 +55,7 @@ export async function POST(request: Request) {
     const ap = await spendAP(supabase, player, AP_COST)
     if (!ap.ok) return NextResponse.json({ error: ap.msg }, { status: 400 })
 
-    const { data: grid } = await supabase
+    const { data: grid } = await (supabase as any)
       .from('grids')
       .select('*')
       .eq('x', px)

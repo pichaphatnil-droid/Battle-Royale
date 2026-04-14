@@ -112,7 +112,7 @@ export async function POST(request: Request) {
         if (newHp <= 0) {
           updates.is_alive = false
           updates.hp = 0
-          await (supabase as any).from('events').insert({
+          await supabase.from('events').insert({
             game_id: game.id,
             event_type: 'ตาย',
             actor_id: null,
@@ -123,7 +123,7 @@ export async function POST(request: Request) {
           })
         }
 
-        await (supabase as any).from('players').update(updates).eq('id', player.id)
+        await supabase.from('players').update(updates).eq('id', player.id)
       }
 
       // ── ตรวจ winner หลัง update ทุกคนแล้ว ───────────────────
@@ -147,7 +147,7 @@ export async function POST(request: Request) {
           !d.expires_at || new Date(d.expires_at).getTime() > Date.now()
         )
         if (validDrops.length !== drops.length) {
-          await (supabase as any).from('grid_states')
+          await supabase.from('grid_states')
             .update({ dropped_items: validDrops }).eq('id', gs.id)
           cleanedCount += drops.length - validDrops.length
         }
@@ -164,13 +164,13 @@ export async function POST(request: Request) {
       .lte('takes_effect_at', new Date().toISOString())
 
     for (const b of betrayals ?? []) {
-      await (supabase as any).from('alliances')
+      await supabase.from('alliances')
         .update({ disbanded_at: new Date().toISOString() })
         .eq('id', b.alliance_id)
-      await (supabase as any).from('betrayal_queue').delete().eq('id', b.id)
+      await supabase.from('betrayal_queue').delete().eq('id', b.id)
       const alliance = b.alliances as { game_id: string } | null
       if (alliance) {
-        await (supabase as any).from('events').insert({
+        await supabase.from('events').insert({
           game_id: alliance.game_id,
           event_type: 'ทรยศ',
           actor_id: b.betrayer_id,

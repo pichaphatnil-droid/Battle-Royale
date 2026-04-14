@@ -1698,7 +1698,7 @@ function MoodleForm({ moodle, onSave, onCancel }: {
         </div>
         <div>
           <div style={s.miniLabel}>ประเภท</div>
-          <select value={type} onChange={e => setType(e.target.value)} style={s.input}>
+          <select value={type} onChange={e => setType(e.target.value as any)} style={s.input}>
             {['กาย','จิตใจ','สังคม'].map(t => <option key={t}>{t}</option>)}
           </select>
         </div>

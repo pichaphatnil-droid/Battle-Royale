@@ -22,6 +22,8 @@ export interface Game {
   id: string; status: GameStatus; started_at: string | null
   ends_at: string | null; paused_at: string | null
   paused_duration: string; created_at: string
+  winner_id: string | null; winner_name: string | null
+  force_combat: boolean
 }
 
 export interface ItemDefinition {
@@ -79,11 +81,13 @@ export interface Player {
   is_alive: boolean; kill_count: number; is_banned: boolean; chat_muted: boolean
   traits: string[]; inventory: InventoryItem[]
   moodles: ActiveMoodle[]; known_recipes: string[]
+  alliance_id: string | null
 }
 
 export interface Alliance {
   id: string; game_id: string; members: string[]
   trust_scores: Record<string, Record<string, number>>
+  leader_id: string | null
   created_at: string; disbanded_at: string | null
 }
 

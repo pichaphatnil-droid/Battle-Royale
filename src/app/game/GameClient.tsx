@@ -87,7 +87,7 @@ export default function GameClient({
     setThirst(calculateCurrentThirst(myPlayer.thirst ?? 100, myPlayer.thirst_updated_at ?? new Date().toISOString(), myPlayer.traits ?? []))
 
     // โหลดประกาศล่าสุด 5 รายการ กรอง dismissed
-   (supabase as any).from('announcements').select('*')
+    supabase.from('announcements').select('*')
       .eq('game_id', game.id)
       .or(`target_id.is.null,target_id.eq.${myPlayer.id}`)
       .order('occurred_at', { ascending: false })
@@ -101,7 +101,7 @@ export default function GameClient({
       })
 
     // โหลด pending invites ที่ยังไม่หมดอายุ
-   (supabase as any).from('alliance_invites').select('*, from_player:from_player_id(name)')
+    supabase.from('alliance_invites').select('*, from_player:from_player_id(name)')
       .eq('to_player_id', myPlayer.id)
       .eq('game_id', game.id)
       .gt('expires_at', new Date().toISOString())
@@ -153,7 +153,7 @@ export default function GameClient({
       }, (payload: any) => {
         const row = payload.new || payload.old
         if (row?.game_id !== game.id) return
-       (supabase as any).from('players').select('*').eq('game_id', game.id)
+        supabase.from('players').select('*').eq('game_id', game.id)
           .then(({ data }: { data: any }) => {
             if (!data) return
             setAllPlayers(data)
@@ -199,7 +199,7 @@ export default function GameClient({
       }, (payload: any) => {
         const row = payload.new || payload.old
         if (row?.game_id !== game.id) return
-       (supabase as any).from('grid_states').select('*').eq('game_id', game.id)
+        supabase.from('grid_states').select('*').eq('game_id', game.id)
           .then(({ data }: { data: any }) => { if (data) setGridStates(data) })
       })
       .on('postgres_changes', {
@@ -209,7 +209,7 @@ export default function GameClient({
         const g = payload.new as Game
         if (g?.id !== game.id) return
         if (g.status === 'จบแล้ว') {
-          (supabase as any).from('events')
+          supabase.from('events')
             .select('data')
             .eq('game_id', game.id)
             .eq('event_type', 'ชนะ')
@@ -251,7 +251,7 @@ export default function GameClient({
         filter: `to_player_id=eq.${myPlayer.id}`,
       }, (payload: any) => {
         const inv = payload.new
-       (supabase as any).from('players').select('name').eq('id', inv.from_player_id).single()
+        supabase.from('players').select('name').eq('id', inv.from_player_id).single()
           .then(({ data }: { data: any }) => {
             setPendingInvites(prev => {
               if (prev.some(p => p.id === inv.id)) return prev
@@ -363,7 +363,7 @@ export default function GameClient({
     const data = await res.json()
     if (!data.ok) { notify(data.error, false); return }
     // อัปเดต alliance state
-    const { data: alliance } = await (supabase as any).from('alliances').select('*').eq('id', data.alliance_id).single()
+    const { data: alliance } = await supabase.from('alliances').select('*').eq('id', data.alliance_id).single()
     if (alliance) setMyAlliance(alliance)
     setMyPlayer(prev => ({ ...prev, alliance_id: data.alliance_id }))
     setPendingInvites(prev => prev.filter(i => i.id !== invite_id))
@@ -371,7 +371,7 @@ export default function GameClient({
   }
 
   async function doDeclineInvite(invite_id: string) {
-    await (supabase as any).from('alliance_invites').delete().eq('id', invite_id)
+    await supabase.from('alliance_invites').delete().eq('id', invite_id)
     setPendingInvites(prev => prev.filter(i => i.id !== invite_id))
     notify('ปฏิเสธคำชวนแล้ว')
   }
@@ -554,7 +554,7 @@ export default function GameClient({
     setChatMsg('')
 
     // insert DB — postgres_changes จะ trigger ChatMessages realtime
-    await (supabase as any).from('chat_messages').insert({
+    await supabase.from('chat_messages').insert({
       game_id: game.id,
       player_id: myPlayer.id,
       channel: chatTab,
@@ -2095,7 +2095,7 @@ function ChatMessages({ gameId, myPlayer, tab, allPlayers, myAlliance }: {
   useEffect(() => {
     setMessages([]) // ล้างก่อนโหลดใหม่เมื่อ tab เปลี่ยน
 
-    let q =(supabase as any).from('chat_messages').select('*')
+    let q = supabase.from('chat_messages').select('*')
       .eq('game_id', gameId)
       .eq('channel', tab)
       .order('sent_at', { ascending: true })

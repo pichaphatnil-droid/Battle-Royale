@@ -13,7 +13,7 @@ export type MoodleType = 'กาย' | 'จิตใจ' | 'สังคม'
 export type InviteType = 'invite' | 'request'
 
 export interface InventoryItem { id: string; qty: number }
-export interface ActiveMoodle { id: string; level: number; expires_at: string | null }
+export interface ActiveMoodle { id: string; level: number; expires_at?: string | null }
 
 export interface User {
   id: string; email: string; role: UserRole; created_at: string

@@ -47,7 +47,7 @@ export default function AdminClient({ currentUserId, games, players, items: init
 
   // ── GAME ACTIONS ──────────────────────────────────────────
   async function createGame() {
-    const { error } = await supabase.from('games').insert({ status: 'รอผู้เล่น', paused_duration: '0' })
+    const { error } = await (supabase as any).from('games').insert({ status: 'รอผู้เล่น', paused_duration: '0' })
     if (error) notify('❌ ' + error.message, false)
     else { notify('✅ สร้างเกมแล้ว'); reload() }
   }
@@ -75,12 +75,6 @@ export default function AdminClient({ currentUserId, games, players, items: init
     const { error } = await supabase.from('games').update({ status: 'จบแล้ว' }).eq('id', id)
     if (error) notify('❌ ' + error.message, false)
     else { notify('✅ จบเกมแล้ว'); reload() }
-  }
-
-  async function toggleForceCombat(id: string, current: boolean) {
-    const { error } = await supabase.from('games').update({ force_combat: !current }).eq('id', id)
-    if (error) notify('❌ ' + error.message, false)
-    else { notify(!current ? '⚔ เปิดบังคับต่อสู้แล้ว' : '🛡 ปิดบังคับต่อสู้แล้ว'); reload() }
   }
 
   async function resetGame(gameId: string) {
@@ -311,19 +305,7 @@ export default function AdminClient({ currentUserId, games, players, items: init
                     <button onClick={() => pauseGame(game.id, true)} style={s.greenBtn}>▶ เล่นต่อ</button>
                   )}
                   {['กำลังเล่น','หยุดชั่วคราว'].includes(game.status) && (
-                    <>
-                      <button onClick={() => endGame(game.id)} style={s.redBtn}>■ จบเกม</button>
-                      <button
-                        onClick={() => toggleForceCombat(game.id, (game as any).force_combat ?? false)}
-                        style={{
-                          ...s.redBtn,
-                          borderColor: (game as any).force_combat ? 'var(--red-bright)' : 'var(--border)',
-                          color: (game as any).force_combat ? 'var(--red-bright)' : 'var(--text-secondary)',
-                          background: (game as any).force_combat ? 'rgba(139,0,0,0.2)' : 'none',
-                        }}>
-                        ⚔ {(game as any).force_combat ? 'บังคับต่อสู้: เปิด' : 'บังคับต่อสู้: ปิด'}
-                      </button>
-                    </>
+                    <button onClick={() => endGame(game.id)} style={s.redBtn}>■ จบเกม</button>
                   )}
                   {game.status === 'จบแล้ว' && (
                     <button onClick={() => resetGame(game.id)} style={{ ...s.redBtn, borderColor:'#FF6B00', color:'#FF6B00' }}>🗑 ลบเกมนี้</button>

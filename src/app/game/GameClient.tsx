@@ -36,7 +36,13 @@ export default function GameClient({
   const supabase = createClient()
 
   // ── State ──────────────────────────────────────────────────
-  const [myPlayer, setMyPlayer] = useState(initialPlayer)
+  // แก้ไข 1: ดักจับค่าที่อาจเป็น null เพื่อป้องกัน Error ตอนนำไปใช้ (.filter, .map)
+  const [myPlayer, setMyPlayer] = useState({
+    ...initialPlayer,
+    inventory: initialPlayer.inventory || [],
+    traits: initialPlayer.traits || [],
+    moodles: initialPlayer.moodles || []
+  })
   const [allPlayers, setAllPlayers] = useState(initialAllPlayers)
   const [gridStates, setGridStates] = useState(initialGridStates)
   const [events, setEvents] = useState(initialEvents)
@@ -62,12 +68,14 @@ export default function GameClient({
   const [myAlliance, setMyAlliance] = useState(initialMyAlliance)
   const [pendingInvites, setPendingInvites] = useState<any[]>([]) // คำชวนที่รอ accept
   const [allianceMsg, setAllianceMsg] = useState<string | null>(null)
+  
   useEffect(() => {
     const check = () => setIsDesktop(window.innerWidth >= 769)
     check()
     window.addEventListener('resize', check)
     return () => window.removeEventListener('resize', check)
   }, [])
+  
   const [isCombat, setIsCombat] = useState(() => {
     const hour = (new Date().getUTCHours() + 7) % 24
     return hour >= 19
@@ -100,8 +108,8 @@ export default function GameClient({
         setToastAnns(data.filter((a: any) => !dismissed.includes(a.id)))
       })
 
-    // โหลด pending invites ที่ยังไม่หมดอายุ
-    (supabase as any).from('alliance_invites').select('*, from_player:from_player_id(name)')
+    // แก้ไข 2: โหลด pending invites ที่ยังไม่หมดอายุ เติม void ป้องกัน Parser มองเป็นฟังก์ชัน
+    void (supabase as any).from('alliance_invites').select('*, from_player:from_player_id(name)')
       .eq('to_player_id', myPlayer.id)
       .eq('game_id', game.id)
       .gt('expires_at', new Date().toISOString())
@@ -153,20 +161,22 @@ export default function GameClient({
       }, (payload: any) => {
         const row = payload.new || payload.old
         if (row?.game_id !== game.id) return
-        (supabase as any).from('players').select('*').eq('game_id', game.id)
+        void (supabase as any).from('players').select('*').eq('game_id', game.id)
           .then(({ data }: { data: any }) => {
             if (!data) return
             setAllPlayers(data)
             const me = data.find((p: any) => p.user_id === myPlayer.user_id)
             if (me) {
+              // แก้ไข 3: ดักจับค่า Array ป้องกัน Null จาก Database
+              const safeMe = { ...me, inventory: me.inventory || [], traits: me.traits || [], moodles: me.moodles || [] }
               if (isMovingRef.current) {
-                setMyPlayer(prev => ({ ...me, pos_x: prev.pos_x, pos_y: prev.pos_y }))
+                setMyPlayer(prev => ({ ...safeMe, pos_x: prev.pos_x, pos_y: prev.pos_y }))
               } else {
-                setMyPlayer(me)
+                setMyPlayer(safeMe)
               }
-              setAp(calculateCurrentAP(me.ap, me.ap_updated_at))
-              setHunger(calculateCurrentHunger(me.hunger ?? 100, me.hunger_updated_at ?? new Date().toISOString(), me.traits ?? []))
-              setThirst(calculateCurrentThirst(me.thirst ?? 100, me.thirst_updated_at ?? new Date().toISOString(), me.traits ?? []))
+              setAp(calculateCurrentAP(safeMe.ap, safeMe.ap_updated_at))
+              setHunger(calculateCurrentHunger(safeMe.hunger ?? 100, safeMe.hunger_updated_at ?? new Date().toISOString(), safeMe.traits ?? []))
+              setThirst(calculateCurrentThirst(safeMe.thirst ?? 100, safeMe.thirst_updated_at ?? new Date().toISOString(), safeMe.traits ?? []))
             }
           })
       })
@@ -199,7 +209,7 @@ export default function GameClient({
       }, (payload: any) => {
         const row = payload.new || payload.old
         if (row?.game_id !== game.id) return
-        (supabase as any).from('grid_states').select('*').eq('game_id', game.id)
+        void (supabase as any).from('grid_states').select('*').eq('game_id', game.id)
           .then(({ data }: { data: any }) => { if (data) setGridStates(data) })
       })
       .on('postgres_changes', {
@@ -209,7 +219,7 @@ export default function GameClient({
         const g = payload.new as Game
         if (g?.id !== game.id) return
         if (g.status === 'จบแล้ว') {
-          (supabase as any).from('events')
+          void (supabase as any).from('events')
             .select('data')
             .eq('game_id', game.id)
             .eq('event_type', 'ชนะ')
@@ -1404,16 +1414,16 @@ function MapPanel({ grids, gridStates, allPlayers, myPlayer, visibleCells, selec
   const gsMap = new Map(gridStates.map(g => [`${g.x},${g.y}`, g]))
 
   const TERRAIN_COLOR: Record<string, string> = {
-    'ภูเขา':    '#6B5744',
-    'หาด':      '#A08C4A',
-    'ป่า':      '#1A6B1A',
+    'ภูเขา':   '#6B5744',
+    'หาด':     '#A08C4A',
+    'ป่า':     '#1A6B1A',
     'โรงเรียน': '#3A3A7A',
-    'เมือง':    '#7A4A4A',
+    'เมือง':   '#7A4A4A',
     'หนองน้ำ':  '#1A5C3A',
     'ประภาคาร': '#8A8A30',
     'ท่าเรือ':  '#2A5A7A',
     'หน้าผา':   '#6A6A6A',
-    'ถ้ำ':      '#220A22',
+    'ถ้ำ':     '#220A22',
     'ซากปรัก':  '#6A4A20',
     'ทั่วไป':   '#404040',
   }

@@ -7,7 +7,7 @@ export type UserRole = 'ผู้เล่น' | 'แอดมิน'
 export type Gender = 'ชาย' | 'หญิง'
 export type ChatChannel = 'ทั่วไป' | 'พื้นที่' | 'พันธมิตร'
 export type AnnouncementType = 'ทั่วไป' | 'อาจารย์ผู้ควบคุม' | 'ส่วนตัว'
-export type ItemCategory = 'อาวุธ' | 'ยา' | 'อาหาร' | 'อุปกรณ์' | 'วัสดุ'
+export type ItemCategory = 'อาวุธ' | 'ยา' | 'อาหาร' | 'น้ำ' | 'อุปกรณ์' | 'วัสดุ'
 export type TraitType = 'กาย' | 'จิตใจและสังคม' | 'ทักษะ' | 'ลบ'
 export type MoodleType = 'กาย' | 'จิตใจ' | 'สังคม'
 

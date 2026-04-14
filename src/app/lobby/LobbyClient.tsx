@@ -25,7 +25,7 @@ export default function LobbyClient({ game, players: initialPlayers, userId, myP
       .channel(`lobby:${currentGame.id}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'players', filter: `game_id=eq.${currentGame.id}` },
         () => {
-         (supabase as any).from('players').select('*').eq('game_id', currentGame.id)
+          supabase.from('players').select('*').eq('game_id', currentGame.id)
             .then(({ data }: { data: any }) => { if (data) setPlayers(data) })
         })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'games', filter: `id=eq.${currentGame.id}` },

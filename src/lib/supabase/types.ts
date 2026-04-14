@@ -10,6 +10,7 @@ export type AnnouncementType = 'ทั่วไป' | 'อาจารย์ผ�
 export type ItemCategory = 'อาวุธ' | 'ยา' | 'อาหาร' | 'น้ำ' | 'อุปกรณ์' | 'วัสดุ'
 export type TraitType = 'กาย' | 'จิตใจและสังคม' | 'ทักษะ' | 'ลบ'
 export type MoodleType = 'กาย' | 'จิตใจ' | 'สังคม'
+export type InviteType = 'invite' | 'request'
 
 export interface InventoryItem { id: string; qty: number }
 export interface ActiveMoodle { id: string; level: number; expires_at: string | null }
@@ -67,6 +68,7 @@ export interface GridState {
   game_id: string; x: number; y: number; items: InventoryItem[]
   is_forbidden: boolean; warn_forbidden: boolean
   searched_at: string | null; respawn_at: string | null
+  dropped_items?: unknown[]
 }
 
 export interface Player {
@@ -91,6 +93,22 @@ export interface Alliance {
   created_at: string; disbanded_at: string | null
 }
 
+export interface AllianceInvite {
+  id: string; game_id: string
+  from_player_id: string; to_player_id: string
+  alliance_id: string | null
+  invite_type: InviteType
+  expires_at: string
+  created_at: string
+}
+
+export interface BetrayalQueue {
+  id: string; game_id: string
+  betrayer_id: string; alliance_id: string
+  takes_effect_at: string
+  created_at: string
+}
+
 export interface GameEvent {
   id: string; game_id: string; occurred_at: string; event_type: string
   actor_id: string | null; target_id: string | null
@@ -112,19 +130,21 @@ export interface ChatMessage {
 export type Database = {
   public: {
     Tables: {
-      users:              { Row: User;             Insert: Omit<User, 'created_at'>;                            Update: Partial<User> }
-      games:              { Row: Game;             Insert: Omit<Game, 'id' | 'created_at' | 'winner_id' | 'winner_name' | 'force_combat'>;  Update: Partial<Game> }
-      item_definitions:   { Row: ItemDefinition;   Insert: Omit<ItemDefinition, 'created_at'>;                  Update: Partial<ItemDefinition> }
-      trait_definitions:  { Row: TraitDefinition;  Insert: Omit<TraitDefinition, 'created_at' | 'updated_at'>; Update: Partial<TraitDefinition> }
-      moodle_definitions: { Row: MoodleDefinition; Insert: Omit<MoodleDefinition, 'created_at' | 'updated_at'>; Update: Partial<MoodleDefinition> }
-      craft_recipes:      { Row: CraftRecipe;      Insert: Omit<CraftRecipe, 'created_at' | 'updated_at'>;     Update: Partial<CraftRecipe> }
-      grids:              { Row: Grid;             Insert: Grid;                                                 Update: Partial<Grid> }
-      grid_states:        { Row: GridState;        Insert: Omit<GridState, 'is_forbidden' | 'warn_forbidden'>;  Update: Partial<GridState> }
-      players:            { Row: Player;           Insert: Omit<Player, 'id' | 'is_alive' | 'kill_count' | 'is_banned' | 'chat_muted'>; Update: Partial<Player> }
-      alliances:          { Row: Alliance;         Insert: Omit<Alliance, 'id' | 'created_at'>;                 Update: Partial<Alliance> }
-      events:             { Row: GameEvent;        Insert: Omit<GameEvent, 'id' | 'occurred_at'>;               Update: never }
-      announcements:      { Row: Announcement;     Insert: Omit<Announcement, 'id' | 'occurred_at'>;            Update: never }
-      chat_messages:      { Row: ChatMessage;      Insert: Omit<ChatMessage, 'id' | 'sent_at'>;                 Update: never }
+      users:              { Row: User;             Insert: Omit<User, 'created_at'>;                                                      Update: Partial<User> }
+      games:              { Row: Game;             Insert: Omit<Game, 'id' | 'created_at' | 'winner_id' | 'winner_name' | 'force_combat'>; Update: Partial<Game> }
+      item_definitions:   { Row: ItemDefinition;   Insert: Omit<ItemDefinition, 'created_at'>;                                            Update: Partial<ItemDefinition> }
+      trait_definitions:  { Row: TraitDefinition;  Insert: Omit<TraitDefinition, 'created_at' | 'updated_at'>;                            Update: Partial<TraitDefinition> }
+      moodle_definitions: { Row: MoodleDefinition; Insert: Omit<MoodleDefinition, 'created_at' | 'updated_at'>;                           Update: Partial<MoodleDefinition> }
+      craft_recipes:      { Row: CraftRecipe;      Insert: Omit<CraftRecipe, 'created_at' | 'updated_at'>;                                Update: Partial<CraftRecipe> }
+      grids:              { Row: Grid;             Insert: Grid;                                                                           Update: Partial<Grid> }
+      grid_states:        { Row: GridState;        Insert: Omit<GridState, 'is_forbidden' | 'warn_forbidden'>;                            Update: Partial<GridState> }
+      players:            { Row: Player;           Insert: Omit<Player, 'id' | 'is_alive' | 'kill_count' | 'is_banned' | 'chat_muted'>;   Update: Partial<Player> }
+      alliances:          { Row: Alliance;         Insert: Omit<Alliance, 'id' | 'created_at'>;                                           Update: Partial<Alliance> }
+      alliance_invites:   { Row: AllianceInvite;   Insert: Omit<AllianceInvite, 'id' | 'created_at'>;                                     Update: Partial<AllianceInvite> }
+      betrayal_queue:     { Row: BetrayalQueue;    Insert: Omit<BetrayalQueue, 'id' | 'created_at'>;                                      Update: Partial<BetrayalQueue> }
+      events:             { Row: GameEvent;        Insert: Omit<GameEvent, 'id' | 'occurred_at'>;                                         Update: never }
+      announcements:      { Row: Announcement;     Insert: Omit<Announcement, 'id' | 'occurred_at'>;                                      Update: never }
+      chat_messages:      { Row: ChatMessage;      Insert: Omit<ChatMessage, 'id' | 'sent_at'>;                                           Update: never }
     }
     Functions: {
       is_admin: { Args: Record<string, never>; Returns: boolean }

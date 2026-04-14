@@ -138,7 +138,7 @@ export default function CreateCharacterClient({ gameId, userId, availableMaleNum
   async function submit() {
     setLoading(true); setError(null)
     const bonusStats = bg.bonus
-    const { error: err } = await supabase.from('players').insert({
+    const { error: err } = await (supabase as any).from('players').insert({
       game_id: gameId, user_id: userId,
       name: name.trim(), student_number: studentNum, gender,
       photo_url: photoUrl || null,

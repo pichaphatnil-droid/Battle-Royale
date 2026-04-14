@@ -80,17 +80,17 @@ export default function AdminClient({ currentUserId, games, players, items: init
   async function resetGame(gameId: string) {
     if (!confirm('⚠️ ยืนยันรีเซ็ตเกม?\n\nจะลบเกมนี้ทิ้งทั้งหมด รวมถึงผู้เล่นและแผนที่')) return
     // ลบ events ก่อน (FK → players)
-    const { error: e1 } = await supabase.from('events').delete().eq('game_id', gameId)
+    const { error: e1 } = await (supabase as any).from('events').delete().eq('game_id', gameId)
     if (e1) { notify('❌ ล้าง events ไม่ได้: ' + e1.message, false); return }
     // ลบ chat_messages
-    await supabase.from('chat_messages').delete().eq('game_id', gameId)
+    await (supabase as any).from('chat_messages').delete().eq('game_id', gameId)
     // ลบ announcements
-    await supabase.from('announcements').delete().eq('game_id', gameId)
+    await (supabase as any).from('announcements').delete().eq('game_id', gameId)
     // ลบ players
-    const { error: e2 } = await supabase.from('players').delete().eq('game_id', gameId)
+    const { error: e2 } = await (supabase as any).from('players').delete().eq('game_id', gameId)
     if (e2) { notify('❌ ลบ players ไม่ได้: ' + e2.message, false); return }
     // ลบ grid_states
-    await supabase.from('grid_states').delete().eq('game_id', gameId)
+    await (supabase as any).from('grid_states').delete().eq('game_id', gameId)
     // ลบ game
     const { error: e3 } = await (supabase as any).from('games').delete().eq('id', gameId)
     if (e3) { notify('❌ ลบเกมไม่ได้: ' + e3.message, false); return }
@@ -99,13 +99,13 @@ export default function AdminClient({ currentUserId, games, players, items: init
   }
 
   async function declareZone(gameId: string, x: number, y: number, warn: boolean) {
-    const { error } = await supabase.from('grid_states')
+    const { error } = await (supabase as any).from('grid_states')
       .update(warn ? { warn_forbidden: true } : { is_forbidden: true, warn_forbidden: false })
       .eq('game_id', gameId).eq('x', x).eq('y', y)
     if (error) { notify('❌ ' + error.message, false); return }
 
     // ประกาศใน events
-    await supabase.from('events').insert({
+    await (supabase as any).from('events').insert({
       game_id: gameId,
       event_type: warn ? 'เตือนเขตอันตราย' : 'ปิดเขตอันตราย',
       pos_x: x, pos_y: y,
@@ -129,13 +129,13 @@ export default function AdminClient({ currentUserId, games, players, items: init
 
   // ── PLAYER ACTIONS ────────────────────────────────────────
   async function banPlayer(id: string, ban: boolean) {
-    const { error } = await supabase.from('players').update({ is_banned: ban }).eq('id', id)
+    const { error } = await (supabase as any).from('players').update({ is_banned: ban }).eq('id', id)
     if (error) notify('❌ ' + error.message, false)
     else { notify(ban ? '✅ แบนแล้ว' : '✅ ยกเลิกแบนแล้ว'); reload() }
   }
 
   async function mutePlayer(id: string, mute: boolean) {
-    const { error } = await supabase.from('players').update({ chat_muted: mute }).eq('id', id)
+    const { error } = await (supabase as any).from('players').update({ chat_muted: mute }).eq('id', id)
     if (error) notify('❌ ' + error.message, false)
     else { notify(mute ? '✅ ปิดแชทแล้ว' : '✅ เปิดแชทแล้ว'); reload() }
   }
@@ -143,11 +143,11 @@ export default function AdminClient({ currentUserId, games, players, items: init
   async function killPlayer(id: string) {
     if (!confirm('ยืนยันฆ่าผู้เล่น?')) return
     const player = players.find(p => p.id === id)
-    const { error } = await supabase.from('players').update({ is_alive: false, hp: 0 }).eq('id', id)
+    const { error } = await (supabase as any).from('players').update({ is_alive: false, hp: 0 }).eq('id', id)
     if (error) { notify('❌ ' + error.message, false); return }
     // insert event ตาย เพื่อให้ death modal ขึ้นสำหรับทุกคน
     if (currentGame) {
-      await supabase.from('events').insert({
+      await (supabase as any).from('events').insert({
         game_id: currentGame.id,
         event_type: 'ตาย',
         actor_id: id,
@@ -161,52 +161,52 @@ export default function AdminClient({ currentUserId, games, players, items: init
   }
 
   async function fillAP(id: string) {
-    const { error } = await supabase.from('players')
+    const { error } = await (supabase as any).from('players')
       .update({ ap: 600, ap_updated_at: new Date().toISOString() }).eq('id', id)
     if (error) notify('❌ ' + error.message, false)
     else notify('✅ เติม AP เต็มแล้ว')
   }
 
   async function fillHP(id: string, maxHp: number) {
-    const { error } = await supabase.from('players')
+    const { error } = await (supabase as any).from('players')
       .update({ hp: maxHp }).eq('id', id)
     if (error) notify('❌ ' + error.message, false)
     else notify('✅ เติม HP เต็มแล้ว')
   }
 
   async function teleportPlayer(id: string, x: number, y: number) {
-    const { error } = await supabase.from('players').update({ pos_x: x, pos_y: y }).eq('id', id)
+    const { error } = await (supabase as any).from('players').update({ pos_x: x, pos_y: y }).eq('id', id)
     if (error) notify('❌ ' + error.message, false)
     else notify(`✅ ย้ายไป [${x},${y}]`)
   }
 
   // ── ITEM ACTIONS ──────────────────────────────────────────
   async function giveItem(playerId: string, gameId: string, itemId: string, qty: number) {
-    const { data: p } = await supabase.from('players').select('inventory').eq('id', playerId).single()
+    const { data: p } = await (supabase as any).from('players').select('inventory').eq('id', playerId).single()
     const inv: Array<{id:string,qty:number}> = p?.inventory ?? []
     const existing = inv.find((i: any) => i.id === itemId)
     const newInv = existing
       ? inv.map((i: any) => i.id === itemId ? { ...i, qty: i.qty + qty } : i)
       : [...inv, { id: itemId, qty }]
-    const { error } = await supabase.from('players').update({ inventory: newInv }).eq('id', playerId)
+    const { error } = await (supabase as any).from('players').update({ inventory: newInv }).eq('id', playerId)
     if (error) notify('❌ ' + error.message, false)
     else notify(`✅ เสก ${itemId} ×${qty} ให้แล้ว`)
   }
 
   async function createAirdrop(gameId: string, x: number, y: number, items: Array<{id:string,qty:number}>, expiresMins: number) {
     const expiresAt = new Date(Date.now() + expiresMins * 60_000).toISOString()
-    const { data: gs } = await supabase.from('grid_states').select('*')
+    const { data: gs } = await (supabase as any).from('grid_states').select('*')
       .eq('game_id', gameId).eq('x', x).eq('y', y).maybeSingle()
     const drops = [
       ...(gs?.dropped_items ?? []),
       ...items.map(item => ({ ...item, dropped_by: 'Airdrop', dropped_by_id: null, expires_at: expiresAt }))
     ]
     if (gs) {
-      await supabase.from('grid_states').update({ dropped_items: drops }).eq('game_id', gameId).eq('x', x).eq('y', y)
+      await (supabase as any).from('grid_states').update({ dropped_items: drops }).eq('game_id', gameId).eq('x', x).eq('y', y)
     } else {
-      await supabase.from('grid_states').insert({ game_id: gameId, x, y, items: [], dropped_items: drops })
+      await (supabase as any).from('grid_states').insert({ game_id: gameId, x, y, items: [], dropped_items: drops })
     }
-    await supabase.from('announcements').insert({
+    await (supabase as any).from('announcements').insert({
       game_id: gameId, ann_type: 'อาจารย์ผู้ควบคุม',
       message: `📦 Airdrop ที่ [${x},${y}]! ขอให้โชคดีละพวกเด็กนรก!`,
     })
@@ -215,21 +215,21 @@ export default function AdminClient({ currentUserId, games, players, items: init
 
   async function saveItem(item: Partial<ItemDefinition> & { id: string }, isNew: boolean) {
     if (isNew) {
-      const { error } = await supabase.from('item_definitions').insert(item)
+      const { error } = await (supabase as any).from('item_definitions').insert(item)
       if (error) { notify('❌ ' + error.message, false); return }
       notify('✅ เพิ่มไอเทมแล้ว')
     } else {
-      const { error } = await supabase.from('item_definitions').update(item).eq('id', item.id)
+      const { error } = await (supabase as any).from('item_definitions').update(item).eq('id', item.id)
       if (error) { notify('❌ ' + error.message, false); return }
       notify('✅ อัปเดตไอเทมแล้ว')
     }
-    const { data } = await supabase.from('item_definitions').select('*').order('id')
+    const { data } = await (supabase as any).from('item_definitions').select('*').order('id')
     if (data) setItems(data)
   }
 
   async function deleteItem(id: string) {
     if (!confirm(`ลบ "${id}"?`)) return
-    const { error } = await supabase.from('item_definitions').delete().eq('id', id)
+    const { error } = await (supabase as any).from('item_definitions').delete().eq('id', id)
     if (error) { notify('❌ ' + error.message, false); return }
     notify('✅ ลบแล้ว')
     setItems(prev => prev.filter(i => i.id !== id))
@@ -371,9 +371,9 @@ export default function AdminClient({ currentUserId, games, players, items: init
           <div onClick={e => e.stopPropagation()} style={{ background:'var(--bg-secondary)', border:'1px solid var(--red-blood)', padding:'20px', width:'480px', maxWidth:'95vw', maxHeight:'90vh', overflow:'auto', display:'flex', flexDirection:'column', gap:'12px' }}>
             <div style={{ fontFamily:'var(--font-display)', fontSize:'14px', color:'var(--red-bright)', letterSpacing:'0.1em' }}>+ เพิ่มสูตรคราฟต์</div>
             <AddRecipeForm items={items} onSave={async (recipe) => {
-              const { error } = await supabase.from('craft_recipes').insert(recipe)
+              const { error } = await (supabase as any).from('craft_recipes').insert(recipe)
               if (error) { notify('❌ ' + error.message, false); return }
-              const { data } = await supabase.from('craft_recipes').select('*').order('id')
+              const { data } = await (supabase as any).from('craft_recipes').select('*').order('id')
               if (data) setRecipes(data)
               setShowAddRecipe(false)
               notify('✅ เพิ่มสูตรแล้ว')
@@ -589,11 +589,11 @@ export default function AdminClient({ currentUserId, games, players, items: init
                   <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
                     <input placeholder="URL ไอคอน" defaultValue={trait.icon_url ?? ''} style={{ ...s.smallInput, flex: 1 }}
                       onBlur={async e => {
-                        await supabase.from('trait_definitions').update({ icon_url: e.target.value || null }).eq('id', trait.id)
+                        await (supabase as any).from('trait_definitions').update({ icon_url: e.target.value || null }).eq('id', trait.id)
                         notify('✅ อัปเดต icon แล้ว')
                       }} />
                     <button onClick={async () => {
-                      await supabase.from('trait_definitions').update({ is_active: !trait.is_active }).eq('id', trait.id)
+                      await (supabase as any).from('trait_definitions').update({ is_active: !trait.is_active }).eq('id', trait.id)
                       notify('✅ อัปเดตแล้ว'); reload()
                     }} style={trait.is_active ? s.redBtn : s.greenBtn}>
                       {trait.is_active ? 'ปิด' : 'เปิด'}
@@ -631,7 +631,7 @@ export default function AdminClient({ currentUserId, games, players, items: init
                     <button onClick={() => { setEditMoodle(m); setShowAddMoodle(true) }} style={s.yellowBtn}>แก้ไข</button>
                     <button onClick={async () => {
                       if (!confirm(`ลบ moodle "${m.id}"?`)) return
-                      const { error } = await supabase.from('moodle_definitions').delete().eq('id', m.id)
+                      const { error } = await (supabase as any).from('moodle_definitions').delete().eq('id', m.id)
                       if (error) { notify('❌ ' + error.message, false); return }
                       setMoodles(prev => prev.filter(x => x.id !== m.id))
                       notify('✅ ลบแล้ว')
@@ -673,8 +673,8 @@ export default function AdminClient({ currentUserId, games, players, items: init
                   </div>
                   <div style={{ display:'flex', gap:'6px', marginTop:'6px' }}>
                     <button onClick={async () => {
-                      await supabase.from('craft_recipes').update({ is_active: !r.is_active }).eq('id', r.id)
-                      const { data } = await supabase.from('craft_recipes').select('*').order('id')
+                      await (supabase as any).from('craft_recipes').update({ is_active: !r.is_active }).eq('id', r.id)
+                      const { data } = await (supabase as any).from('craft_recipes').select('*').order('id')
                       if (data) setRecipes(data)
                       notify('✅ อัปเดตแล้ว')
                     }} style={r.is_active ? s.redBtn : s.greenBtn}>
@@ -682,7 +682,7 @@ export default function AdminClient({ currentUserId, games, players, items: init
                     </button>
                     <button onClick={async () => {
                       if (!confirm('ลบสูตร "' + r.id + '"?')) return
-                      await supabase.from('craft_recipes').delete().eq('id', r.id)
+                      await (supabase as any).from('craft_recipes').delete().eq('id', r.id)
                       setRecipes(prev => prev.filter(x => x.id !== r.id))
                       notify('✅ ลบแล้ว')
                     }} style={s.redBtn}>ลบ</button>
@@ -701,7 +701,7 @@ export default function AdminClient({ currentUserId, games, players, items: init
               <button onClick={async () => {
                 if (gridsLoaded) return
                 setGridsLoading(true)
-                const { data } = await supabase.from('grids').select('*').order('zone_name').order('x').order('y')
+                const { data } = await (supabase as any).from('grids').select('*').order('zone_name').order('x').order('y')
                 setGrids(data ?? [])
                 setGridsLoaded(true)
                 setGridsLoading(false)
@@ -782,15 +782,15 @@ export default function AdminClient({ currentUserId, games, players, items: init
             moodle={editMoodle}
             onSave={async (data) => {
               if (editMoodle) {
-                const { error } = await supabase.from('moodle_definitions').update(data).eq('id', editMoodle.id)
+                const { error } = await (supabase as any).from('moodle_definitions').update(data).eq('id', editMoodle.id)
                 if (error) { notify('❌ ' + error.message, false); return }
                 notify('✅ อัปเดตแล้ว')
               } else {
-                const { error } = await supabase.from('moodle_definitions').insert(data)
+                const { error } = await (supabase as any).from('moodle_definitions').insert(data)
                 if (error) { notify('❌ ' + error.message, false); return }
                 notify('✅ เพิ่มแล้ว')
               }
-              const { data: fresh } = await supabase.from('moodle_definitions').select('*').order('id')
+              const { data: fresh } = await (supabase as any).from('moodle_definitions').select('*').order('id')
               if (fresh) setMoodles(fresh)
               setShowAddMoodle(false); setEditMoodle(null)
             }}
@@ -812,7 +812,7 @@ export default function AdminClient({ currentUserId, games, players, items: init
             grid={editGrid}
             items={items}
             onSave={async (newSpawnTable) => {
-              const { error } = await supabase.from('grids')
+              const { error } = await (supabase as any).from('grids')
                 .update({ spawn_table: newSpawnTable })
                 .eq('x', editGrid.x).eq('y', editGrid.y)
               if (error) { notify('❌ ' + error.message, false); return }
@@ -867,7 +867,7 @@ function PlayerRow({ player, onBan, onMute, onKill, onFillAP, onFillHP, onTelepo
   const [addMoodleId, setAddMoodleId] = useState('')
 
   async function saveMoodles(updated: any[]) {
-    const { error } = await supabase.from('players').update({ moodles: updated }).eq('id', player.id)
+    const { error } = await (supabase as any).from('players').update({ moodles: updated }).eq('id', player.id)
     if (!error) setCurrentMoodles(updated)
   }
 
@@ -1442,7 +1442,7 @@ function ZoneDeclare({ gameId, onDeclare, notify }: {
   const [forbiddenZones, setForbiddenZones] = useState<{x:number,y:number}[]>([])
 
   useEffect(() => {
-    supabase.from('grid_states').select('x,y,warn_forbidden,is_forbidden')
+    (supabase as any).from('grid_states').select('x,y,warn_forbidden,is_forbidden')
       .eq('game_id', gameId).or('warn_forbidden.eq.true,is_forbidden.eq.true')
       .then(({ data }) => {
         if (!data) return
@@ -1499,7 +1499,7 @@ function ZoneDeclare({ gameId, onDeclare, notify }: {
 
   async function doClearAll() {
     if (!confirm('ยืนยันล้างเขตทั้งหมด?')) return
-    await supabase.from('grid_states')
+    await (supabase as any).from('grid_states')
       .update({ is_forbidden: false, warn_forbidden: false })
       .eq('game_id', gameId).or('is_forbidden.eq.true,warn_forbidden.eq.true')
     setForbiddenZones([]); setWarnedZones([])

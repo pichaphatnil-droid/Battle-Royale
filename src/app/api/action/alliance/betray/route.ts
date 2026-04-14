@@ -19,21 +19,21 @@ export async function POST(request: Request) {
     if (!player) return NextResponse.json({ error }, { status: 400 })
     if (!player.alliance_id) return NextResponse.json({ error: 'ไม่ได้อยู่ในกลุ่ม' }, { status: 400 })
 
-    const { data: alliance } = await supabase.from('alliances').select('*').eq('id', player.alliance_id).single()
+    const { data: alliance } = await (supabase as any).from('alliances').select('*').eq('id', player.alliance_id).single()
     if (!alliance || alliance.disbanded_at) return NextResponse.json({ error: 'ไม่พบกลุ่ม' }, { status: 400 })
 
     const members = alliance.members as string[]
     const otherMembers = members.filter(id => id !== player.id)
 
     // ยุบกลุ่มทันที
-    await supabase.from('alliances').update({ disbanded_at: new Date().toISOString() }).eq('id', alliance.id)
+    await (supabase as any).from('alliances').update({ disbanded_at: new Date().toISOString() }).eq('id', alliance.id)
 
     // ล้าง alliance_id ทุกคน
-    await supabase.from('players').update({ alliance_id: null }).in('id', members)
+    await (supabase as any).from('players').update({ alliance_id: null }).in('id', members)
 
     // trigger moodle โศกเศร้า / แค้นเคือง ให้คนที่ถูกทรยศ
     for (const memberId of otherMembers) {
-      const { data: memberPlayer } = await supabase.from('players').select('moodles').eq('id', memberId).single()
+      const { data: memberPlayer } = await (supabase as any).from('players').select('moodles').eq('id', memberId).single()
       if (!memberPlayer) continue
       const moodles: any[] = memberPlayer.moodles ?? []
       const hasGrief = moodles.some(m => m.id === 'โศกเศร้า')
@@ -41,7 +41,7 @@ export async function POST(request: Request) {
       const newMoodles = [...moodles]
       if (!hasGrief) newMoodles.push({ id: 'โศกเศร้า', level: 1 })
       if (!hasAngry) newMoodles.push({ id: 'แค้นเคือง', level: 1 })
-      await supabase.from('players').update({ moodles: newMoodles }).eq('id', memberId)
+      await (supabase as any).from('players').update({ moodles: newMoodles }).eq('id', memberId)
     }
 
     // log event ทรยศ — ไม่มี actor_id เพื่อให้แสดงทุกคน

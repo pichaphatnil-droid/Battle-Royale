@@ -19,23 +19,23 @@ export async function POST(request: Request) {
     if (!player) return NextResponse.json({ error }, { status: 400 })
     if (!player.alliance_id) return NextResponse.json({ error: 'ไม่ได้อยู่ในกลุ่ม' }, { status: 400 })
 
-    const { data: alliance } = await supabase.from('alliances').select('*').eq('id', player.alliance_id).single()
+    const { data: alliance } = await (supabase as any).from('alliances').select('*').eq('id', player.alliance_id).single()
     if (!alliance) return NextResponse.json({ error: 'ไม่พบกลุ่ม' }, { status: 400 })
 
     const members = (alliance.members as string[]).filter(id => id !== player.id)
 
     // ออกจากกลุ่ม
-    await supabase.from('players').update({ alliance_id: null }).eq('id', player.id)
+    await (supabase as any).from('players').update({ alliance_id: null }).eq('id', player.id)
 
     if (members.length < 2) {
       // เหลือ 1 คน = ยุบกลุ่ม
-      await supabase.from('alliances').update({ disbanded_at: new Date().toISOString() }).eq('id', alliance.id)
+      await (supabase as any).from('alliances').update({ disbanded_at: new Date().toISOString() }).eq('id', alliance.id)
       if (members.length === 1) {
-        await supabase.from('players').update({ alliance_id: null }).eq('id', members[0])
+        await (supabase as any).from('players').update({ alliance_id: null }).eq('id', members[0])
       }
     } else {
       // อัปเดต members
-      await supabase.from('alliances').update({ members }).eq('id', alliance.id)
+      await (supabase as any).from('alliances').update({ members }).eq('id', alliance.id)
     }
 
     await logEvent(supabase, {

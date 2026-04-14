@@ -40,8 +40,8 @@ export async function POST(request: Request) {
 
     // ดึง grid_states และ grids พร้อมกัน
     const [{ data: gridState }, { data: destGrid }] = await Promise.all([
-      supabase.from('grid_states').select('*').eq('game_id', game_id).eq('x', x).eq('y', y).maybeSingle(),
-      supabase.from('grids').select('terrain').eq('x', x).eq('y', y).maybeSingle(),
+     (supabase as any).from('grid_states').select('*').eq('game_id', game_id).eq('x', x).eq('y', y).maybeSingle(),
+     (supabase as any).from('grids').select('terrain').eq('x', x).eq('y', y).maybeSingle(),
     ])
 
     const isForbidden = gridState?.is_forbidden ?? false
@@ -87,11 +87,11 @@ export async function POST(request: Request) {
             }))
           ]
           if (gs) {
-            await supabase.from('grid_states')
+            await (supabase as any).from('grid_states')
               .update({ dropped_items: newDrops })
               .eq('game_id', game_id).eq('x', x).eq('y', y)
           } else {
-            await supabase.from('grid_states')
+            await (supabase as any).from('grid_states')
               .insert({ game_id, x, y, items: [], dropped_items: newDrops })
           }
           updateData.inventory = []
@@ -115,7 +115,7 @@ export async function POST(request: Request) {
       updateData.moodles = moodlesAfterSwamp
     }
 
-    await supabase.from('players').update(updateData).eq('id', player.id)
+    await (supabase as any).from('players').update(updateData).eq('id', player.id)
 
     await logEvent(supabase, {
       game_id,

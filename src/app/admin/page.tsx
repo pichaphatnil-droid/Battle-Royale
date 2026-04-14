@@ -8,9 +8,9 @@ export default async function AdminPage() {
   if (!user) redirect('/login')
 
   // ตรวจสอบว่าเป็นแอดมิน
-  const { data: userData } = await supabase
+  const { data: userData } = await (supabase as any)
     .from('users')
-    .select('*')
+    .select('role')
     .eq('id', user.id)
     .single()
 
@@ -25,8 +25,8 @@ export default async function AdminPage() {
     { data: moodles },
     { data: recipes },
   ] = await Promise.all([
-    supabase.from('games').select('*').order('created_at', { ascending: false }),
-    supabase.from('players').select('*'),
+    (supabase as any).from('games').select('*').order('created_at', { ascending: false }),
+    (supabase as any).from('players').select('*'),
     supabase.from('item_definitions').select('*').order('id'),
     supabase.from('trait_definitions').select('*').order('id'),
     supabase.from('moodle_definitions').select('*').order('id'),

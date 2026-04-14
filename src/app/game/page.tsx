@@ -37,14 +37,14 @@ export default async function GamePage() {
     { data: events },
     { data: myAlliance },
   ] = await Promise.all([
-    supabase.from('grids').select('*'),
-    supabase.from('grid_states').select('*').eq('game_id', game.id),
-    supabase.from('trait_definitions').select('*'),
-    supabase.from('moodle_definitions').select('*'),
-    supabase.from('item_definitions').select('*'),
-    supabase.from('craft_recipes').select('*').eq('is_active', true).order('id'),
-    supabase.from('events').select('*').eq('game_id', game.id).order('occurred_at', { ascending: false }).limit(50),
-    supabase.from('alliances').select('*').eq('game_id', game.id).contains('members', [myPlayer.id]).is('disbanded_at', null).maybeSingle(),
+   (supabase as any).from('grids').select('*'),
+   (supabase as any).from('grid_states').select('*').eq('game_id', game.id),
+   (supabase as any).from('trait_definitions').select('*'),
+   (supabase as any).from('moodle_definitions').select('*'),
+   (supabase as any).from('item_definitions').select('*'),
+   (supabase as any).from('craft_recipes').select('*').eq('is_active', true).order('id'),
+   (supabase as any).from('events').select('*').eq('game_id', game.id).order('occurred_at', { ascending: false }).limit(50),
+   (supabase as any).from('alliances').select('*').eq('game_id', game.id).contains('members', [myPlayer.id]).is('disbanded_at', null).maybeSingle(),
   ])
 
   return (

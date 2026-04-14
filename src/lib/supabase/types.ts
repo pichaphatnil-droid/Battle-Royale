@@ -113,7 +113,7 @@ export type Database = {
   public: {
     Tables: {
       users:              { Row: User;             Insert: Omit<User, 'created_at'>;                            Update: Partial<User> }
-      games:              { Row: Game;             Insert: Omit<Game, 'id' | 'created_at'>;                     Update: Partial<Game> }
+      games:              { Row: Game;             Insert: Omit<Game, 'id' | 'created_at' | 'winner_id' | 'winner_name' | 'force_combat'>;  Update: Partial<Game> }
       item_definitions:   { Row: ItemDefinition;   Insert: Omit<ItemDefinition, 'created_at'>;                  Update: Partial<ItemDefinition> }
       trait_definitions:  { Row: TraitDefinition;  Insert: Omit<TraitDefinition, 'created_at' | 'updated_at'>; Update: Partial<TraitDefinition> }
       moodle_definitions: { Row: MoodleDefinition; Insert: Omit<MoodleDefinition, 'created_at' | 'updated_at'>; Update: Partial<MoodleDefinition> }
@@ -129,6 +129,8 @@ export type Database = {
     Functions: {
       is_admin: { Args: Record<string, never>; Returns: boolean }
       is_player_in_game: { Args: { gid: string }; Returns: boolean }
+      เริ่มเกมใหม่: { Args: { game_id: string }; Returns: void }
+      ตรวจรีสปอว์นทั้งหมด: { Args: Record<string, never>; Returns: void }
     }
   }
 }

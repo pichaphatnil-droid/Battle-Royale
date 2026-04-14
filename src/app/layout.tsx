@@ -2,8 +2,8 @@ import type { Metadata, Viewport } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'โปรแกรม',
-  description: 'Battle Royale — 4 วัน 30 คน 1 ผู้รอดชีวิต',
+  title: 'โปรแกรมจำลองและวิจัยยุทธการทางบก ประจำปี 2000',
+  description: 'ในสังกัดกองทัพบก สาธารณรัฐมหาเอเชียบูรพา',
   icons: { icon: 'https://iili.io/BfyEfSI.png' },
 }
 

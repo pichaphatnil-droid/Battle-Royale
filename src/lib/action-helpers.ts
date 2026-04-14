@@ -12,7 +12,7 @@ export async function spendAP(supabase: any, player: Player, cost: number): Prom
   const current = calcAP(player.ap, player.ap_updated_at)
   if (current < cost) return { ok: false, msg: `AP ไม่พอ (มี ${current} ต้องการ ${cost})` }
 
-  await supabase.from('players').update({
+  await (supabase as any).from('players').update({
     ap: current - cost,
     ap_updated_at: new Date().toISOString(),
   }).eq('id', player.id)
@@ -30,7 +30,7 @@ export async function logEvent(supabase: any, params: {
   pos_y?: number
   data?: Record<string, unknown>
 }) {
-  await supabase.from('events').insert({
+  await (supabase as any).from('events').insert({
     game_id: params.game_id,
     event_type: params.event_type,
     actor_id: params.actor_id ?? null,
@@ -45,7 +45,7 @@ export async function logEvent(supabase: any, params: {
 export async function getValidPlayer(supabase: any, userId: string, gameId?: string): Promise<{
   player: Player | null; error?: string
 }> {
-  let q = supabase.from('players').select('*').eq('user_id', userId)
+  let q = (supabase as any).from('players').select('*').eq('user_id', userId)
   if (gameId) q = q.eq('game_id', gameId)
   const { data: player } = await q.limit(1).maybeSingle()
 
@@ -57,7 +57,7 @@ export async function getValidPlayer(supabase: any, userId: string, gameId?: str
 
 // ── ตรวจเกมที่กำลังเล่น ──────────────────────────────────────
 export async function getActiveGame(supabase: any, gameId: string) {
-  const { data: game } = await supabase
+  const { data: game } = await (supabase as any)
     .from('games')
     .select('*')
     .eq('id', gameId)
@@ -121,7 +121,7 @@ export async function applyMoodleTriggers(
   } = {}
 ): Promise<{ newMoodles: any[], msgs: string[] }> {
   // ดึง moodle_definitions ที่มี trigger ตรงกับ event นี้
-  const { data: defs } = await supabase
+  const { data: defs } = await (supabase as any)
     .from('moodle_definitions')
     .select('id, trigger, max_level')
     .not('trigger', 'is', null)
@@ -217,7 +217,7 @@ export async function applyStatThresholdMoodles(
 ): Promise<{ newMoodles: any[], updates: Record<string, any> }> {
   let defs = moodleDefsOverride
   if (!defs) {
-    const { data } = await supabase
+    const { data } = await (supabase as any)
       .from('moodle_definitions')
       .select('id, trigger, max_level')
       .eq('is_active', true)
@@ -318,7 +318,7 @@ export async function applyStatThresholdMoodles(
 // ── ตรวจ winner และประกาศ ─────────────────────────────────────
 // เรียกหลังผู้เล่นตายทุกครั้ง — ถ้าเหลือ 1 คน จบเกมทันที
 export async function checkAndDeclareWinner(supabase: any, gameId: string): Promise<boolean> {
-  const { data: alivePlayers } = await supabase
+  const { data: alivePlayers } = await (supabase as any)
     .from('players')
     .select('id, name, kill_count, student_number')
     .eq('game_id', gameId)
@@ -328,13 +328,13 @@ export async function checkAndDeclareWinner(supabase: any, gameId: string): Prom
   if (!alivePlayers || alivePlayers.length !== 1) return false
 
   const winner = alivePlayers[0]
-  await supabase.from('games').update({
+  await (supabase as any).from('games').update({
     status: 'จบแล้ว',
     winner_id: winner.id,
     winner_name: winner.name,
   }).eq('id', gameId)
 
-  await supabase.from('events').insert({
+  await (supabase as any).from('events').insert({
     game_id: gameId,
     event_type: 'ชนะ',
     actor_id: winner.id,

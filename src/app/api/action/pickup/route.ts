@@ -53,8 +53,8 @@ export async function POST(request: Request) {
     const newDrops = drops.filter((_: any, i: number) => i !== drop_index)
 
     await Promise.all([
-      supabase.from('players').update({ inventory: newInventory }).eq('id', player.id),
-      supabase.from('grid_states').update({ dropped_items: newDrops })
+     (supabase as any).from('players').update({ inventory: newInventory }).eq('id', player.id),
+     (supabase as any).from('grid_states').update({ dropped_items: newDrops })
         .eq('game_id', game_id).eq('x', player.pos_x).eq('y', player.pos_y),
     ])
 

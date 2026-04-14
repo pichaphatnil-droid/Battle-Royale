@@ -126,7 +126,7 @@ export async function POST(request: Request) {
     const newHp = Math.max(0, target.hp - damage)
     const died = newHp <= 0
 
-    await supabase.from('players').update({ hp: newHp, is_alive: !died })
+    await (supabase as any).from('players').update({ hp: newHp, is_alive: !died })
       .eq('id', target.id)
 
     // ── apply moodle triggers สำหรับ target (attack_received) ──
@@ -139,12 +139,12 @@ export async function POST(request: Request) {
       supabase, { ...target, moodles: targetMoodles }, { hp: newHp, maxHp: target.max_hp }
     )
     if (!died) {
-      await supabase.from('players').update({ moodles: targetMoodlesAfterHp })
+      await (supabase as any).from('players').update({ moodles: targetMoodlesAfterHp })
         .eq('id', target.id)
     }
 
     if (died) {
-      await supabase.from('players').update({ kill_count: attacker.kill_count + 1 })
+      await (supabase as any).from('players').update({ kill_count: attacker.kill_count + 1 })
         .eq('id', attacker.id)
 
       // ── apply moodle triggers สำหรับ attacker (attack_dealt) ──
@@ -153,7 +153,7 @@ export async function POST(request: Request) {
         supabase, attacker, 'attack_dealt',
         { killCount: newKillCount } // ส่ง kill_count หลัง +1 แล้ว
       )
-      await supabase.from('players').update({ moodles: attackerMoodles })
+      await (supabase as any).from('players').update({ moodles: attackerMoodles })
         .eq('id', attacker.id)
 
       // drop inventory ของผู้ตายลงพื้น
@@ -178,16 +178,16 @@ export async function POST(request: Request) {
         ]
 
         if (gs) {
-          await supabase.from('grid_states')
+          await (supabase as any).from('grid_states')
             .update({ dropped_items: newDrops })
             .eq('game_id', game_id).eq('x', target.pos_x).eq('y', target.pos_y)
         } else {
-          await supabase.from('grid_states')
+          await (supabase as any).from('grid_states')
             .insert({ game_id, x: target.pos_x, y: target.pos_y, items: [], dropped_items: newDrops })
         }
 
         // ล้าง inventory ของผู้ตาย
-        await supabase.from('players').update({ inventory: [] }).eq('id', target.id)
+        await (supabase as any).from('players').update({ inventory: [] }).eq('id', target.id)
       }
     }
 

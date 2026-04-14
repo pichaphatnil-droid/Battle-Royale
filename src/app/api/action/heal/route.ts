@@ -165,7 +165,7 @@ export async function POST(request: Request) {
     newInventory[itemIdx] = { ...newInventory[itemIdx], qty: newInventory[itemIdx].qty - 1 }
     updates.inventory = newInventory.filter(i => i.qty > 0)
 
-    await supabase.from('players').update(updates).eq('id', player.id)
+    await (supabase as any).from('players').update(updates).eq('id', player.id)
 
     await logEvent(supabase, {
       game_id, event_type: 'ใช้ไอเทม',

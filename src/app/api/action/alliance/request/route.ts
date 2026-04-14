@@ -22,33 +22,33 @@ export async function POST(request: Request) {
     if (player.alliance_id) return NextResponse.json({ error: 'คุณมีกลุ่มอยู่แล้ว' }, { status: 400 })
 
     // ดึงข้อมูลกลุ่ม
-    const { data: alliance } = await supabase.from('alliances').select('*').eq('id', alliance_id).single()
+    const { data: alliance } = await (supabase as any).from('alliances').select('*').eq('id', alliance_id).single()
     if (!alliance || alliance.disbanded_at) return NextResponse.json({ error: 'กลุ่มนี้ไม่มีแล้ว' }, { status: 400 })
     if ((alliance.members as string[]).length >= 3) return NextResponse.json({ error: 'กลุ่มเต็มแล้ว (สูงสุด 3 คน)' }, { status: 400 })
 
     // ดึงหัวหน้ากลุ่ม
-    const { data: leader } = await supabase.from('players').select('*').eq('id', alliance.leader_id).single()
+    const { data: leader } = await (supabase as any).from('players').select('*').eq('id', alliance.leader_id).single()
     if (!leader || !leader.is_alive) return NextResponse.json({ error: 'หัวหน้ากลุ่มเสียชีวิตแล้ว' }, { status: 400 })
 
     // ตรวจระยะมองเห็น — ต้องเห็นสมาชิกอย่างน้อย 1 คนในกลุ่ม
-    const { data: fromGrid } = await supabase.from('grids').select('visibility').eq('x', player.pos_x).eq('y', player.pos_y).maybeSingle()
+    const { data: fromGrid } = await (supabase as any).from('grids').select('visibility').eq('x', player.pos_x).eq('y', player.pos_y).maybeSingle()
     const fromVis = fromGrid?.visibility ?? 2
     const fromCells = new Set(cellsInRange(player.pos_x, player.pos_y, fromVis).map(c => `${c.x},${c.y}`))
 
     const members = alliance.members as string[]
-    const { data: memberPlayers } = await supabase.from('players').select('pos_x,pos_y').in('id', members)
+    const { data: memberPlayers } = await (supabase as any).from('players').select('pos_x,pos_y').in('id', members)
     const canSeeAny = memberPlayers?.some(m => fromCells.has(`${m.pos_x},${m.pos_y}`))
     if (!canSeeAny) return NextResponse.json({ error: 'ต้องอยู่ในระยะมองเห็นสมาชิกกลุ่มอย่างน้อย 1 คน' }, { status: 400 })
 
     // ลบ request เก่า (ถ้ามี)
-    await supabase.from('alliance_invites')
+    await (supabase as any).from('alliance_invites')
       .delete()
       .eq('from_player_id', player.id)
       .eq('alliance_id', alliance_id)
       .eq('invite_type', 'request')
 
     // สร้าง request — from = ผู้ขอ, to = หัวหน้า
-    const { data: invite, error: invErr } = await supabase.from('alliance_invites').insert({
+    const { data: invite, error: invErr } = await (supabase as any).from('alliance_invites').insert({
       game_id,
       from_player_id: player.id,
       to_player_id: alliance.leader_id,

@@ -1142,7 +1142,7 @@ export default function GameClient({
                         const hasSwim = (myPlayer.traits ?? []).includes('ว่ายน้ำเก่ง')
                         const hasFastFeet = (myPlayer.traits ?? []).includes('เท้าเร็ว')
                         const hasWeakLegs = (myPlayer.traits ?? []).includes('ขาอ่อน')
-                        let moveCost = 20
+                        let moveCost = 5
                         if (hasFastFeet) moveCost -= 5
                         if (hasWeakLegs) moveCost += 5
                         if (isSwamp && !hasSwim) moveCost += 15

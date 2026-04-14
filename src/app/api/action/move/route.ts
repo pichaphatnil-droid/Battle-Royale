@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { spendAP, logEvent, getValidPlayer, getActiveGame, applyMoodleTriggers, checkAndDeclareWinner } from '@/lib/action-helpers'
 
-const AP_COST = 20
+const AP_COST = 5
 
 export async function POST(request: Request) {
   try {

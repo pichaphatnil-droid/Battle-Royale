@@ -66,7 +66,7 @@ export async function POST(request: Request) {
     const spawnItemIds = rawSpawn.map((i: any) => i.id)
     let craftOnlyIds: string[] = []
     if (spawnItemIds.length > 0) {
-      const { data: defs } = await supabase.from('item_definitions').select('id,data').in('id', spawnItemIds)
+      const { data: defs } = await (supabase as any).from('item_definitions').select('id,data').in('id', spawnItemIds)
       craftOnlyIds = (defs ?? []).filter((d: any) => (d.data as any)?.craftable_only).map((d: any) => d.id)
     }
     const spawnTable = rawSpawn.filter((i: any) => !craftOnlyIds.includes(i.id))
@@ -81,7 +81,7 @@ export async function POST(request: Request) {
         if (existing) existing.qty += item.qty
         else newInventory.push({ id: item.id, qty: item.qty })
       }
-      await supabase.from('players')
+      await (supabase as any).from('players')
         .update({ inventory: newInventory })
         .eq('id', player.id)
     }
@@ -93,11 +93,11 @@ export async function POST(request: Request) {
       { player_id: player.id, searched_at: now },
     ]
     if (gs) {
-      await supabase.from('grid_states')
+      await (supabase as any).from('grid_states')
         .update({ searched_by: updatedSearchedBy })
         .eq('game_id', game_id).eq('x', px).eq('y', py)
     } else {
-      await supabase.from('grid_states')
+      await (supabase as any).from('grid_states')
         .insert({ game_id, x: px, y: py, items: [], searched_by: updatedSearchedBy })
     }
 

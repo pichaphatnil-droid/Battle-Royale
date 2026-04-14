@@ -10,7 +10,7 @@ export async function proxy(request: NextRequest) {
     {
       cookies: {
         getAll() { return request.cookies.getAll() },
-        setAll(cookiesToSet) {
+        setAll(cookiesToSet: Array<{ name: string; value: string; options?: any }>) {
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
           supabaseResponse = NextResponse.next({ request })
           cookiesToSet.forEach(({ name, value, options }) =>
@@ -31,7 +31,7 @@ export async function proxy(request: NextRequest) {
 
   if (pathname.startsWith('/admin')) {
     if (!user) return NextResponse.redirect(new URL('/login', request.url))
-    const { data: userData } = await supabase.from('users').select('*').eq('id', user.id).single()
+    const { data: userData } = await (supabase as any).from('users').select('*').eq('id', user.id).single()
     if (userData?.role !== 'แอดมิน') return NextResponse.redirect(new URL('/', request.url))
   }
 

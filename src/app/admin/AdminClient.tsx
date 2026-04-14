@@ -77,6 +77,12 @@ export default function AdminClient({ currentUserId, games, players, items: init
     else { notify('✅ จบเกมแล้ว'); reload() }
   }
 
+  async function toggleForceCombat(id: string, current: boolean) {
+    const { error } = await (supabase as any).from('games').update({ force_combat: !current }).eq('id', id)
+    if (error) notify('❌ ' + error.message, false)
+    else { notify(!current ? '⚔ เปิดบังคับต่อสู้แล้ว' : '🛡 ปิดบังคับต่อสู้แล้ว'); reload() }
+  }
+
   async function resetGame(gameId: string) {
     if (!confirm('⚠️ ยืนยันรีเซ็ตเกม?\n\nจะลบเกมนี้ทิ้งทั้งหมด รวมถึงผู้เล่นและแผนที่')) return
     // ลบ events ก่อน (FK → players)
@@ -305,7 +311,19 @@ export default function AdminClient({ currentUserId, games, players, items: init
                     <button onClick={() => pauseGame(game.id, true)} style={s.greenBtn}>▶ เล่นต่อ</button>
                   )}
                   {['กำลังเล่น','หยุดชั่วคราว'].includes(game.status) && (
-                    <button onClick={() => endGame(game.id)} style={s.redBtn}>■ จบเกม</button>
+                    <>
+                      <button onClick={() => endGame(game.id)} style={s.redBtn}>■ จบเกม</button>
+                      <button
+                        onClick={() => toggleForceCombat(game.id, (game as any).force_combat ?? false)}
+                        style={{
+                          ...s.redBtn,
+                          borderColor: (game as any).force_combat ? 'var(--red-bright)' : 'var(--border)',
+                          color: (game as any).force_combat ? 'var(--red-bright)' : 'var(--text-secondary)',
+                          background: (game as any).force_combat ? 'rgba(139,0,0,0.2)' : 'none',
+                        }}>
+                        ⚔ {(game as any).force_combat ? 'บังคับต่อสู้: เปิด' : 'บังคับต่อสู้: ปิด'}
+                      </button>
+                    </>
                   )}
                   {game.status === 'จบแล้ว' && (
                     <button onClick={() => resetGame(game.id)} style={{ ...s.redBtn, borderColor:'#FF6B00', color:'#FF6B00' }}>🗑 ลบเกมนี้</button>
@@ -1160,7 +1178,7 @@ function EditItemForm({ item, onSave, onCancel, moodles }: {
           <div><div style={s.miniLabel}>เลือดออก %</div><input type='number' value={bleed} onChange={e=>setBleed(e.target.value)} style={s.input}/></div>
           <div><div style={s.miniLabel}>มึนงง %</div><input type='number' value={stun} onChange={e=>setStun(e.target.value)} style={s.input}/></div>
           <div style={{ gridColumn:'1/-1' }}><div style={s.miniLabel}>ประเภท</div>
-            <select value={wtype} onChange={e=>setWtype(e.target.value)} style={s.input}>
+            <select value={wtype} onChange={e=>setWtype(e.target.value as any)} style={s.input}>
               <option value='blunt'>ทื่อ (blunt)</option><option value='sharp'>มีคม (sharp)</option>
               <option value='ranged'>ระยะไกล</option><option value='firearm'>ปืน</option><option value='throwable'>ขว้าง</option>
             </select>
@@ -1442,7 +1460,7 @@ function ZoneDeclare({ gameId, onDeclare, notify }: {
   const [forbiddenZones, setForbiddenZones] = useState<{x:number,y:number}[]>([])
 
   useEffect(() => {
-    (supabase as any).from('grid_states').select('x,y,warn_forbidden,is_forbidden')
+   (supabase as any).from('grid_states').select('x,y,warn_forbidden,is_forbidden')
       .eq('game_id', gameId).or('warn_forbidden.eq.true,is_forbidden.eq.true')
       .then(({ data }: { data: any }) => {
         if (!data) return

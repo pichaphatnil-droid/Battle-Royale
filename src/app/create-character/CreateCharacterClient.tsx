@@ -19,6 +19,25 @@ const TOTAL_TRAIT_POINTS = 5
 const MIN_STAT = 1
 const MAX_STAT = 8
 
+// กำหนดคู่ลบที่ห้ามหยิบพร้อมกัน
+const TRAIT_CONFLICTS: Record<string, string[]> = {
+  'กระเพาะเล็ก': ['ตะกละตะกลาม'],
+  'ตะกละตะกลาม': ['กระเพาะเล็ก'],
+  'ชุ่มชื้น': ['คอแห้ง'],
+  'คอแห้ง': ['ชุ่มชื้น'],
+  'โชคช่วย': ['โชคร้าย', 'ซุ่มซ่าม'],
+  'โชคร้าย': ['โชคช่วย'],
+  'แข็งแรง': ['ขี้โรค'],
+  'ขี้โรค': ['แข็งแรง', 'มนุษย์เหล็กไหล'],
+  'บ้าระห่ำ': ['ขี้ขลาด', 'ใจอ่อนแอ'],
+  'ขี้ขลาด': ['บ้าระห่ำ', 'เกิดมาสู้'],
+  'เกิดมาสู้': ['ขี้ขลาด'],
+  'ตาฝ้าฟาง': ['สายตาเหยี่ยว', 'แม่นปืน', 'นักสำรวจ'],
+  'สายตาเหยี่ยว': ['ตาฝ้าฟาง'],
+  'แม่นปืน': ['ตาฝ้าฟาง'],
+  'นักสำรวจ': ['ตาฝ้าฟาง'],
+}
+
 const BACKGROUNDS: Array<{
   id: string; name: string; desc: string
   startTraits: string[]
@@ -79,7 +98,7 @@ export default function CreateCharacterClient({ gameId, userId, availableMaleNum
   const getTraitCost = (id: string) => {
     const def = traits.find(t => t.id === id)
     if (!def || def.type === 'ลบ') return 0
-    return def.bonus_points ?? 2 // ใช้ bonus_points จาก DB
+    return def.bonus_points ?? 2 
   }
 
   const getTraitRefund = (id: string) => {
@@ -128,15 +147,33 @@ export default function CreateCharacterClient({ gameId, userId, availableMaleNum
 
   function toggleTrait(id: string) {
     if (bg.startTraits.includes(id)) return
+    
     const def = traits.find(t => t.id === id)
     const isNeg = def?.type === 'ลบ'
     const isSelected = selectedTraits.includes(id)
-    if (isSelected) { setSelectedTraits(prev => prev.filter(x => x !== id)); return }
     
+    if (isSelected) { 
+      setSelectedTraits(prev => prev.filter(x => x !== id))
+      setError(null)
+      return 
+    }
+    
+    // ตรวจสอบความขัดแย้ง (Conflict)
+    const conflicts = TRAIT_CONFLICTS[id] || []
+    const hasConflict = conflicts.some(cId => selectedTraits.includes(cId) || bg.startTraits.includes(cId))
+    
+    if (hasConflict) {
+      const conflictName = conflicts.find(cId => selectedTraits.includes(cId) || bg.startTraits.includes(cId))
+      setError(`ไม่สามารถเลือกนิสัยนี้ได้เพราะขัดแย้งกับ "${conflictName}"`)
+      return
+    }
+
     // เช็คแต้มก่อนเลือก (ยกเว้นนิสัยเสีย)
     const cost = getTraitCost(id)
     if (!isNeg && traitPointsLeft < cost) return
+    
     setSelectedTraits(prev => [...prev, id])
+    setError(null)
   }
 
   const allTraits = [...new Set([...bg.startTraits, ...selectedTraits])]
@@ -156,7 +193,6 @@ export default function CreateCharacterClient({ gameId, userId, availableMaleNum
   async function submit() {
     setLoading(true); setError(null)
     
-    // คำนวณ Max HP
     const allTraitsForCalc = [...bg.startTraits, ...selectedTraits]
     const maxHpBonus = allTraitsForCalc.reduce((sum, tid) => {
       const def = traits.find(t => t.id === tid)
@@ -319,6 +355,12 @@ export default function CreateCharacterClient({ gameId, userId, availableMaleNum
               </span>
             </div>
 
+            {error && (
+              <div style={{ padding:'8px 12px', background:'rgba(139,0,0,0.1)', border:'1px solid var(--red-blood)', color:'var(--red-bright)', fontSize:'12px', marginBottom:'12px' }}>
+                ⚠ {error}
+              </div>
+            )}
+
             <div>
               <div style={s.groupLabel}>นิสัยจากภูมิหลัง (ฟรี)</div>
               <div style={{ display:'flex', flexWrap:'wrap', gap:'4px' }}>
@@ -335,14 +377,17 @@ export default function CreateCharacterClient({ gameId, userId, availableMaleNum
                   {group.list.map(trait => {
                     const isNeg = trait.type === 'ลบ'
                     const isSelected = selectedTraits.includes(trait.id)
-                    const cost = isNeg ? (trait.bonus_points ?? 2) : (trait.bonus_points ?? 2)
+                    const cost = trait.bonus_points ?? 2
+                    const conflicts = TRAIT_CONFLICTS[trait.id] || []
+                    const isConflicted = conflicts.some(cId => selectedTraits.includes(cId) || bg.startTraits.includes(cId))
                     const canAfford = isNeg || isSelected || traitPointsLeft >= cost
+                    
                     return (
                       <button key={trait.id} onClick={() => toggleTrait(trait.id)} style={{
                         width:'100%', padding:'8px 10px', border:'1px solid', textAlign:'left',
                         fontFamily:'var(--font-body)', transition:'all 0.15s',
-                        opacity: !canAfford ? 0.35 : 1,
-                        cursor: !canAfford ? 'not-allowed' : 'pointer',
+                        opacity: (!canAfford || isConflicted) && !isSelected ? 0.35 : 1,
+                        cursor: (!canAfford || isConflicted) && !isSelected ? 'not-allowed' : 'pointer',
                         borderColor: isSelected ? (isNeg ? 'var(--red-bright)' : 'var(--green-bright)') : 'var(--border)',
                         background: isSelected ? (isNeg ? 'rgba(204,34,34,0.08)' : 'rgba(45,90,39,0.1)') : 'var(--bg-tertiary)',
                       }}>
@@ -371,7 +416,7 @@ export default function CreateCharacterClient({ gameId, userId, availableMaleNum
               </div>
             ))}
 
-            <div style={{ display:'flex', gap:'8px' }}>
+            <div style={{ display:'flex', gap:'8px', marginTop: '12px' }}>
               <button onClick={() => setStep(1)} style={s.backBtn}>← กลับ</button>
               <button onClick={() => setStep(3)} disabled={traitPointsLeft < 0}
                 style={{ ...s.nextBtn, flex:1, opacity: traitPointsLeft >= 0 ? 1 : 0.4 }}>
@@ -424,7 +469,6 @@ export default function CreateCharacterClient({ gameId, userId, availableMaleNum
                     <div style={{ flex:1, height:'4px', background:'var(--bg-primary)', border:'1px solid var(--border)', marginLeft:'8px' }}>
                       <div style={{ height:'100%', background:'var(--red-bright)', width:`${Math.min(100, final*10)}%`, transition:'width 0.2s' }} />
                     </div>
-                    {/* แสดงโบนัสจาก Traits แยกระบุให้ผู้เล่นเห็น */}
                     {bonusFromTrait !== 0 && (
                       <span style={{ fontSize:'10px', color: bonusFromTrait > 0 ? 'var(--green-bright)' : 'var(--red-bright)', fontFamily:'var(--font-mono)', marginLeft:'6px' }}>
                         {bonusFromTrait > 0 ? `+${bonusFromTrait}` : bonusFromTrait}

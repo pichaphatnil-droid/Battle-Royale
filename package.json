@@ -4,21 +4,19 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build && tsc --project tsconfig.server.json",
-    "start": "node server.js",
+    "build": "next build",
+    "start": "next start",
     "lint": "next lint"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.47.2",
     "next": "^16.2.2",
-    "node-cron": "^4.2.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
     "@types/node": "^20",
-    "@types/node-cron": "^3.0.11",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",

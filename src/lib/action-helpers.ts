@@ -1,6 +1,30 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import type { Player } from '@/lib/supabase/types'
 
+// ── รวม special_effects จาก trait_definitions ────────────────
+// เรียกครั้งเดียวต่อ action แล้วใช้ผลลัพธ์แทน hardcode ชื่อ trait
+export async function getTraitEffects(supabase: any, traitIds: string[]): Promise<Record<string, any>> {
+  if (!traitIds || traitIds.length === 0) return {}
+  const { data: defs } = await supabase
+    .from('trait_definitions')
+    .select('id, special_effects')
+    .in('id', traitIds)
+  if (!defs) return {}
+  const merged: Record<string, any> = {}
+  for (const def of defs) {
+    const fx = def.special_effects as Record<string, any> ?? {}
+    for (const [key, val] of Object.entries(fx)) {
+      if (typeof val === 'number') {
+        // accumulate numbers (e.g. multiple visibility_bonus)
+        merged[key] = (merged[key] ?? 0) + val
+      } else {
+        merged[key] = val
+      }
+    }
+  }
+  return merged
+}
+
 // ── คำนวณ AP ปัจจุบัน ─────────────────────────────────────────
 export function calcAP(savedAP: number, savedAt: string): number {
   const minutes = (Date.now() - new Date(savedAt).getTime()) / 60_000
@@ -343,6 +367,13 @@ export async function checkAndDeclareWinner(supabase: any, gameId: string): Prom
       kill_count: winner.kill_count ?? 0,
       student_number: winner.student_number,
     },
+  })
+
+  // ประกาศทั่วทั้งเกม
+  await (supabase as any).from('announcements').insert({
+    game_id: gameId,
+    ann_type: 'อาจารย์ผู้ควบคุม',
+    message: `👑 ${winner.name} เป็นผู้รอดชีวิตคนสุดท้าย! เกมจบแล้ว`,
   })
 
   return true

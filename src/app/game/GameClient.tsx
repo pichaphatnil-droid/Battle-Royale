@@ -36,18 +36,13 @@ export default function GameClient({
   const supabase = createClient()
 
   // ── State ──────────────────────────────────────────────────
-  // แก้ไข 1: ดักจับค่าที่อาจเป็น null เพื่อป้องกัน Error ตอนนำไปใช้ (.filter, .map)
-  const [myPlayer, setMyPlayer] = useState({
-    ...initialPlayer,
-    inventory: initialPlayer.inventory || [],
-    traits: initialPlayer.traits || [],
-    moodles: initialPlayer.moodles || []
-  })
+  const [myPlayer, setMyPlayer] = useState(initialPlayer)
   const [allPlayers, setAllPlayers] = useState(initialAllPlayers)
   const [gridStates, setGridStates] = useState(initialGridStates)
   const [events, setEvents] = useState(initialEvents)
   const [selectedCell, setSelectedCell] = useState<{x:number,y:number}|null>(null)
   const [chatTab, setChatTab] = useState<ChatTab>('ทั่วไป')
+  const [rightTab, setRightTab] = useState<'stats'|'ally'>('stats')
   const [chatMsg, setChatMsg] = useState('')
   const [ap, setAp] = useState(initialPlayer.ap)
   const [hunger, setHunger] = useState(initialPlayer.hunger ?? 100)
@@ -68,14 +63,12 @@ export default function GameClient({
   const [myAlliance, setMyAlliance] = useState(initialMyAlliance)
   const [pendingInvites, setPendingInvites] = useState<any[]>([]) // คำชวนที่รอ accept
   const [allianceMsg, setAllianceMsg] = useState<string | null>(null)
-  
   useEffect(() => {
     const check = () => setIsDesktop(window.innerWidth >= 769)
     check()
     window.addEventListener('resize', check)
     return () => window.removeEventListener('resize', check)
   }, [])
-  
   const [isCombat, setIsCombat] = useState(() => {
     const hour = (new Date().getUTCHours() + 7) % 24
     return hour >= 19
@@ -108,8 +101,8 @@ export default function GameClient({
         setToastAnns(data.filter((a: any) => !dismissed.includes(a.id)))
       })
 
-    // แก้ไข 2: โหลด pending invites ที่ยังไม่หมดอายุ เติม void ป้องกัน Parser มองเป็นฟังก์ชัน
-    void (supabase as any).from('alliance_invites').select('*, from_player:from_player_id(name)')
+    // โหลด pending invites ที่ยังไม่หมดอายุ
+    (supabase as any).from('alliance_invites').select('*, from_player:from_player_id(name)')
       .eq('to_player_id', myPlayer.id)
       .eq('game_id', game.id)
       .gt('expires_at', new Date().toISOString())
@@ -159,26 +152,25 @@ export default function GameClient({
         event: '*', schema: 'public', table: 'players',
         filter: `game_id=eq.${game.id}`,
       }, (payload: any) => {
-        const row = payload.new || payload.old
-        if (row?.game_id !== game.id) return
-        void (supabase as any).from('players').select('*').eq('game_id', game.id)
-          .then(({ data }: { data: any }) => {
-            if (!data) return
-            setAllPlayers(data)
-            const me = data.find((p: any) => p.user_id === myPlayer.user_id)
-            if (me) {
-              // แก้ไข 3: ดักจับค่า Array ป้องกัน Null จาก Database
-              const safeMe = { ...me, inventory: me.inventory || [], traits: me.traits || [], moodles: me.moodles || [] }
-              if (isMovingRef.current) {
-                setMyPlayer(prev => ({ ...safeMe, pos_x: prev.pos_x, pos_y: prev.pos_y }))
-              } else {
-                setMyPlayer(safeMe)
-              }
-              setAp(calculateCurrentAP(safeMe.ap, safeMe.ap_updated_at))
-              setHunger(calculateCurrentHunger(safeMe.hunger ?? 100, safeMe.hunger_updated_at ?? new Date().toISOString(), safeMe.traits ?? []))
-              setThirst(calculateCurrentThirst(safeMe.thirst ?? 100, safeMe.thirst_updated_at ?? new Date().toISOString(), safeMe.traits ?? []))
-            }
-          })
+        const updated = payload.new
+        if (!updated || updated.game_id !== game.id) return
+        setAllPlayers(prev => {
+          const idx = prev.findIndex((p: any) => p.id === updated.id)
+          if (idx === -1) return [...prev, updated]
+          const next = [...prev]
+          next[idx] = updated
+          return next
+        })
+        if (updated.user_id === myPlayer.user_id) {
+          if (isMovingRef.current) {
+            setMyPlayer((prev: any) => ({ ...updated, pos_x: prev.pos_x, pos_y: prev.pos_y }))
+          } else {
+            setMyPlayer(updated)
+          }
+          setAp(calculateCurrentAP(updated.ap, updated.ap_updated_at))
+          setHunger(calculateCurrentHunger(updated.hunger ?? 100, updated.hunger_updated_at ?? new Date().toISOString(), updated.traits ?? []))
+          setThirst(calculateCurrentThirst(updated.thirst ?? 100, updated.thirst_updated_at ?? new Date().toISOString(), updated.traits ?? []))
+        }
       })
       .on('postgres_changes', {
         event: 'INSERT', schema: 'public', table: 'events',
@@ -187,6 +179,13 @@ export default function GameClient({
         const ev = payload.new
         if (ev?.game_id !== game.id) return
         setEvents(prev => [ev as GameEvent, ...prev].slice(0, 100))
+        if (ev.event_type === 'ชนะ') {
+          setWinnerModal({
+            name: ev.data?.winner_name ?? '?',
+            killCount: ev.data?.kill_count ?? 0,
+            studentNumber: ev.data?.student_number ?? 0,
+          })
+        }
         if (ev.event_type === 'ตาย') {
           setAllPlayers(prev => {
             const deadPlayer = prev.find((p: any) => p.id === (ev.target_id ?? ev.actor_id))
@@ -207,10 +206,15 @@ export default function GameClient({
         event: '*', schema: 'public', table: 'grid_states',
         filter: `game_id=eq.${game.id}`,
       }, (payload: any) => {
-        const row = payload.new || payload.old
-        if (row?.game_id !== game.id) return
-        void (supabase as any).from('grid_states').select('*').eq('game_id', game.id)
-          .then(({ data }: { data: any }) => { if (data) setGridStates(data) })
+        const updated = payload.new
+        if (!updated || updated.game_id !== game.id) return
+        setGridStates(prev => {
+          const idx = prev.findIndex((g: any) => g.x === updated.x && g.y === updated.y)
+          if (idx === -1) return [...prev, updated]
+          const next = [...prev]
+          next[idx] = updated
+          return next
+        })
       })
       .on('postgres_changes', {
         event: 'UPDATE', schema: 'public', table: 'games',
@@ -219,7 +223,7 @@ export default function GameClient({
         const g = payload.new as Game
         if (g?.id !== game.id) return
         if (g.status === 'จบแล้ว') {
-          void (supabase as any).from('events')
+          (supabase as any).from('events')
             .select('data')
             .eq('game_id', game.id)
             .eq('event_type', 'ชนะ')
@@ -1000,19 +1004,25 @@ export default function GameClient({
         </div>
       )}
       {/* ── MOBILE TAB BAR ── */}
-      <div style={{
-        display: 'flex', borderBottom: '1px solid var(--red-blood)',
-        background: 'var(--bg-secondary)', flexShrink: 0,
-      }} className="mobile-tabs">
-        {([['map','🗺 แผนที่'],['stats','👤 สถานะ'],['log','📜 บันทึก'],['ally','🤝 กลุ่ม'],['chat','💬 แชท']] as const).map(([tab, label]) => (
-          <button key={tab} onClick={() => setMobileTab(tab)} style={{
-            flex: 1, padding: '10px 4px', background: 'none', border: 'none',
-            borderBottom: mobileTab === tab ? '2px solid var(--red-bright)' : '2px solid transparent',
-            color: mobileTab === tab ? 'var(--red-bright)' : 'var(--text-secondary)',
-            fontSize: '12px', cursor: 'pointer', fontFamily: 'var(--font-body)',
-          }}>{label}</button>
-        ))}
-      </div>
+      {!isDesktop && (
+        <div style={{
+          display: 'flex', borderBottom: '1px solid var(--red-blood)',
+          background: 'var(--bg-secondary)', flexShrink: 0,
+        }}>
+          {([['map','🗺','แผนที่'],['stats','👤','สถานะ'],['log','📜','บันทึก'],['ally','🤝','กลุ่ม'],['chat','💬','แชท']] as const).map(([tab, icon, label]) => (
+            <button key={tab} onClick={() => setMobileTab(tab as any)} style={{
+              flex: 1, padding: '8px 2px', background: 'none', border: 'none',
+              borderBottom: mobileTab === tab ? '2px solid var(--red-bright)' : '2px solid transparent',
+              color: mobileTab === tab ? 'var(--red-bright)' : 'var(--text-secondary)',
+              fontSize: '10px', cursor: 'pointer', fontFamily: 'var(--font-body)',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px',
+            }}>
+              <span style={{ fontSize: '16px', lineHeight: 1 }}>{icon}</span>
+              <span>{label}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       <div style={s.body}>
         {/* ── LEFT: MAP + CELL POPUP + EVENTS ── */}
@@ -1088,7 +1098,8 @@ export default function GameClient({
                       const isHere = selectedCell.x === myPlayer.pos_x && selectedCell.y === myPlayer.pos_y
                       return (
                         <div>
-                          <div style={s.miniLabel}>◎ ของบนพื้น</div>
+                          <div style={s.miniLabel}>◎ ของบนพื้น ({validDrops.length})</div>
+                          <div style={{ maxHeight: '160px', overflowY: 'auto' }}>
                           {validDrops.map((drop: any, i: number) => {
                             const minsLeft = drop.expires_at
                               ? Math.max(0, Math.ceil((new Date(drop.expires_at).getTime() - Date.now()) / 60_000))
@@ -1126,12 +1137,28 @@ export default function GameClient({
                               </div>
                             )
                           })}
+                          </div>
                         </div>
                       )
                     })()}
 
                     {/* Action buttons */}
                     <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '4px' }}>
+                      {/* ฆ่าตัวตาย — เฉพาะช่องตัวเอง */}
+                      {selectedCell.x === myPlayer.pos_x && selectedCell.y === myPlayer.pos_y && myPlayer.is_alive && (
+                        <button onClick={async () => {
+                          if (!confirm('ยืนยันฆ่าตัวตาย? การกระทำนี้ไม่สามารถย้อนกลับได้')) return
+                          const res = await fetch('/api/action/suicide', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ game_id: game.id }),
+                          })
+                          const data = await res.json()
+                          if (!data.ok) notify(data.error, false)
+                        }} style={{ ...s.actionBtn, background:'rgba(60,0,0,0.6)', border:'1px solid #660000', color:'#CC4444', fontSize:'11px' }}>
+                          ☠ ฆ่าตัวตาย
+                        </button>
+                      )}
                       {/* เดินไป */}
                       {myPlayer.pos_x !== null && (
                         Math.abs(myPlayer.pos_x - selectedCell.x) <= 1 &&
@@ -1142,7 +1169,7 @@ export default function GameClient({
                         const hasSwim = (myPlayer.traits ?? []).includes('ว่ายน้ำเก่ง')
                         const hasFastFeet = (myPlayer.traits ?? []).includes('เท้าเร็ว')
                         const hasWeakLegs = (myPlayer.traits ?? []).includes('ขาอ่อน')
-                        let moveCost = 5
+                        let moveCost = 20
                         if (hasFastFeet) moveCost -= 5
                         if (hasWeakLegs) moveCost += 5
                         if (isSwamp && !hasSwim) moveCost += 15
@@ -1291,16 +1318,32 @@ export default function GameClient({
 
         {/* ── RIGHT: PLAYER PANEL + CHAT ── */}
         <div style={{ ...s.rightPanel, display: isDesktop || mobileTab === 'stats' || mobileTab === 'chat' || mobileTab === 'ally' ? 'flex' : 'none' }}>
-          {/* Player info — ซ่อนใน mobile เมื่ออยู่ tab ally */}
-          <div style={{ display: isDesktop || mobileTab !== 'ally' ? 'flex' : 'none', flexDirection:'column', overflow:'hidden', flex: myAlliance ? 'none' : 1 }}>
+          {/* ── Desktop tab bar: สถานะ / พันธมิตร ── */}
+          {isDesktop && (
+            <div style={{ display:'flex', borderBottom:'1px solid var(--border)', flexShrink:0 }}>
+              <button onClick={() => setRightTab('stats')} style={{
+                flex:1, padding:'7px 4px', background:'none', border:'none', fontSize:'12px', cursor:'pointer', fontFamily:'var(--font-body)',
+                borderBottom: rightTab === 'stats' ? '2px solid var(--red-bright)' : '2px solid transparent',
+                color: rightTab === 'stats' ? 'var(--red-bright)' : 'var(--text-secondary)',
+              }}>📋 สถานะ</button>
+              <button onClick={() => setRightTab('ally')} style={{
+                flex:1, padding:'7px 4px', background:'none', border:'none', fontSize:'12px', cursor:'pointer', fontFamily:'var(--font-body)',
+                borderBottom: rightTab === 'ally' ? '2px solid var(--green-bright)' : '2px solid transparent',
+                color: rightTab === 'ally' ? 'var(--green-bright)' : 'var(--text-secondary)',
+              }}>🤝 พันธมิตร{myAlliance && !myAlliance.disbanded_at ? ` (${(myAlliance.members as string[]).length}/3)` : ''}</button>
+            </div>
+          )}
+
+          {/* Player info */}
+          <div style={{ display: (isDesktop ? rightTab === 'stats' : (mobileTab !== 'ally')) ? 'flex' : 'none', flexDirection:'column', overflow:'hidden', flex:1 }}>
             <PlayerPanel myPlayer={myPlayer} ap={ap} hunger={hunger} thirst={thirst} hpClass={hpClass} hpPct={hpPct} traits={traits} moodleDefs={moodleDefs} itemDefs={itemDefs} onHeal={doHeal} onDrop={doDrop} onCraft={doCraft} recipes={recipes} invSort={invSort} setInvSort={setInvSort} />
           </div>
 
           {/* ── Alliance Panel ── */}
           <div style={{
-            display: myAlliance && !myAlliance.disbanded_at ? (isDesktop || mobileTab === 'ally' ? 'flex' : 'none') : (mobileTab === 'ally' ? 'flex' : 'none'),
-            flexDirection:'column', padding:'10px', borderBottom:'1px solid var(--border)',
-            background:'rgba(0,40,0,0.15)', flexShrink:0,
+            display: (isDesktop ? rightTab === 'ally' : (mobileTab === 'ally')) ? 'flex' : 'none',
+            flexDirection:'column', padding:'10px', flex:1, overflow:'auto',
+            background:'rgba(0,40,0,0.15)',
           }}>
             {myAlliance && !myAlliance.disbanded_at ? (
               <>
@@ -1414,16 +1457,16 @@ function MapPanel({ grids, gridStates, allPlayers, myPlayer, visibleCells, selec
   const gsMap = new Map(gridStates.map(g => [`${g.x},${g.y}`, g]))
 
   const TERRAIN_COLOR: Record<string, string> = {
-    'ภูเขา':   '#6B5744',
-    'หาด':     '#A08C4A',
-    'ป่า':     '#1A6B1A',
+    'ภูเขา':    '#6B5744',
+    'หาด':      '#A08C4A',
+    'ป่า':      '#1A6B1A',
     'โรงเรียน': '#3A3A7A',
-    'เมือง':   '#7A4A4A',
+    'เมือง':    '#7A4A4A',
     'หนองน้ำ':  '#1A5C3A',
     'ประภาคาร': '#8A8A30',
     'ท่าเรือ':  '#2A5A7A',
     'หน้าผา':   '#6A6A6A',
-    'ถ้ำ':     '#220A22',
+    'ถ้ำ':      '#220A22',
     'ซากปรัก':  '#6A4A20',
     'ทั่วไป':   '#404040',
   }
@@ -1458,6 +1501,7 @@ function MapPanel({ grids, gridStates, allPlayers, myPlayer, visibleCells, selec
               const isVP = mx >= vx0 && mx <= vx1 && my >= vy0 && my <= vy1
               const isForbidden = gs?.is_forbidden
               const isWarn = gs?.warn_forbidden
+              const hasAirdrop = (gs?.dropped_items as any[] ?? []).some((d: any) => d.dropped_by === 'Airdrop' && (!d.expires_at || new Date(d.expires_at).getTime() > Date.now()))
               const terrainColor = TERRAIN_COLOR[grid?.terrain ?? ''] ?? '#383838'
               return (
                 <div key={mx}
@@ -1467,6 +1511,7 @@ function MapPanel({ grids, gridStates, allPlayers, myPlayer, visibleCells, selec
                     width: `${MINI}px`, height: `${MINI}px`, flexShrink: 0, cursor: 'pointer',
                     background: isMyPos ? 'var(--text-gold)' : hasPlayer ? 'var(--red-bright)' : hasAlly ? 'var(--green-bright)' : isForbidden ? '#CC0000' : isWarn ? '#E67E22' : terrainColor,
                     outline: isVP ? '1px solid rgba(255,255,255,0.35)' : 'none',
+                    boxShadow: hasAirdrop ? 'inset 0 0 0 1px #F39C12' : 'none',
                   }}
                 />
               )
@@ -1482,6 +1527,7 @@ function MapPanel({ grids, gridStates, allPlayers, myPlayer, visibleCells, selec
           { label: 'พันธมิตร', el: <span style={{ display:'inline-block', width:'9px', height:'9px', borderRadius:'50%', border:'1.5px solid var(--green-bright)', verticalAlign:'middle' }} /> },
           { label: 'เฝ้าระวัง', el: <span className="forbidden-blink" style={{ display:'inline-block', width:'9px', height:'9px', background:'#E67E22', verticalAlign:'middle' }} /> },
           { label: 'อันตราย', el: <span className="forbidden-blink" style={{ display:'inline-block', width:'9px', height:'9px', background:'#CC0000', verticalAlign:'middle' }} /> },
+          { label: 'Airdrop', el: <span style={{ display:'inline-block', width:'9px', height:'9px', border:'1px solid #F39C12', verticalAlign:'middle' }} /> },
         ].map(({ label, el }) => (
           <span key={label} style={{ display:'flex', alignItems:'center', gap:'3px', fontSize:'10px', color:'var(--text-secondary)' }}>
             {el} {label}
@@ -2063,7 +2109,8 @@ function EventRow({ event, allPlayers, myPlayer, allyIds }: {
         const dmg = event.data?.damage ?? '?'
         const crit = event.data?.crit ? ' [คริต!]' : ''
         const bleed = event.data?.bleeding ? ' [เลือดออก]' : ''
-        return `${actorName} โจมตี ${targetName} ${dmg} ดาเมจ${crit}${bleed}`
+        const hpLeft = event.data?.hp_left !== undefined ? ` → HP ${event.data.hp_left}` : ''
+        return `${actorName} โจมตี ${targetName} ${dmg} ดาเมจ${crit}${bleed}${hpLeft}`
       }
       case 'โจมตี-หลบ': return `${targetName} หลบการโจมตีของ ${actorName}`
       case 'ตาย': {

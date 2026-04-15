@@ -36,7 +36,6 @@ export default async function GamePage() {
     { data: items },
     { data: recipes },
     { data: events },
-    { data: myAlliance },
   ] = await Promise.all([
    sb.from('grids').select('*'),
    sb.from('grid_states').select('*').eq('game_id', game.id),
@@ -45,8 +44,20 @@ export default async function GamePage() {
    sb.from('item_definitions').select('*'),
    sb.from('craft_recipes').select('*').eq('is_active', true).order('id'),
    sb.from('events').select('*').eq('game_id', game.id).order('occurred_at', { ascending: false }).limit(50),
-   sb.from('alliances').select('*').eq('game_id', game.id).contains('members', [myPlayer.id]).is('disbanded_at', null).maybeSingle(),
   ])
+
+  // Alliance query แยกออกมา เพราะ .contains() อาจ fail ถ้า members ไม่ใช่ jsonb
+  let myAlliance: any = null
+  try {
+    const { data: alData } = await sb
+      .from('alliances')
+      .select('*')
+      .eq('game_id', game.id)
+      .filter('members', 'cs', JSON.stringify([myPlayer.id]))
+      .is('disbanded_at', null)
+      .maybeSingle()
+    myAlliance = alData
+  } catch { /* ยังไม่มีกลุ่ม */ }
 
   return (
     <GameClient

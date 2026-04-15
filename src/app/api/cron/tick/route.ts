@@ -144,8 +144,13 @@ export async function POST(request: Request) {
     }
 
     // ── รีสปอว์น grid ─────────────────────────────────────────
-    const { error: respawnError } = await (supabase as any).rpc('ตรวจรีสปอว์นทั้งหมด')
-    results.respawn = respawnError ? `error: ${respawnError.message}` : 'ok'
+    try {
+      const { error: respawnError } = await (supabase as any).rpc('ตรวจรีสปอว์นทั้งหมด')
+      results.respawn = respawnError ? `error: ${respawnError.message}` : 'ok'
+    } catch (rpcErr) {
+      console.warn('[CRON] respawn RPC skipped:', String(rpcErr))
+      results.respawn = 'skipped'
+    }
 
     // ── ลบของทิ้งที่หมดอายุ (เฉพาะเกมที่กำลังเล่น) ──────────────
     const activeGameIds = (games ?? []).map((g: any) => g.id)
@@ -171,27 +176,32 @@ export async function POST(request: Request) {
     }
 
     // ── ทรยศ ──────────────────────────────────────────────────
-    const { data: betrayals } = await (supabase as any)
-      .from('betrayal_queue')
-      .select('*, alliances(*)')
-      .lte('takes_effect_at', new Date().toISOString())
+    try {
+      const { data: betrayals } = await (supabase as any)
+        .from('betrayal_queue')
+        .select('*, alliances(*)')
+        .lte('takes_effect_at', new Date().toISOString())
 
-    for (const b of betrayals ?? []) {
-      await (supabase as any).from('alliances')
-        .update({ disbanded_at: new Date().toISOString() })
-        .eq('id', b.alliance_id)
-      await (supabase as any).from('betrayal_queue').delete().eq('id', b.id)
-      const alliance = b.alliances as { game_id: string } | null
-      if (alliance) {
-        await (supabase as any).from('events').insert({
-          game_id: alliance.game_id,
-          event_type: 'ทรยศ',
-          actor_id: b.betrayer_id,
-          data: { alliance_id: b.alliance_id },
-        })
+      for (const b of betrayals ?? []) {
+        await (supabase as any).from('alliances')
+          .update({ disbanded_at: new Date().toISOString() })
+          .eq('id', b.alliance_id)
+        await (supabase as any).from('betrayal_queue').delete().eq('id', b.id)
+        const alliance = b.alliances as { game_id: string } | null
+        if (alliance) {
+          await (supabase as any).from('events').insert({
+            game_id: alliance.game_id,
+            event_type: 'ทรยศ',
+            actor_id: b.betrayer_id,
+            data: { alliance_id: b.alliance_id },
+          })
+        }
       }
+      results.betrayals = `processed ${betrayals?.length ?? 0}`
+    } catch (betrayalErr) {
+      console.warn('[CRON] betrayal_queue skipped:', String(betrayalErr))
+      results.betrayals = 'skipped'
     }
-    results.betrayals = `processed ${betrayals?.length ?? 0}`
     results.games = games?.length ?? 0
 
     return NextResponse.json({ ok: true, ...results })

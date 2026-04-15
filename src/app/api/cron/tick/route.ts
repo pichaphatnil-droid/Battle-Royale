@@ -29,6 +29,14 @@ export async function POST(request: Request) {
       .select('id, level_effects, trigger')
       .eq('is_active', true)
 
+    // ── ดึง trait_definitions ครั้งเดียวสำหรับทุก player ────────
+    const { data: allTraitDefs } = await (supabase as any)
+      .from('trait_definitions')
+      .select('id, special_effects')
+    const traitDefsMap = new Map<string, Record<string,any>>(
+      (allTraitDefs ?? []).map((t: any) => [t.id, t.special_effects ?? {}])
+    )
+
     for (const game of games ?? []) {
       const { data: players } = await (supabase as any)
         .from('players')
@@ -47,21 +55,14 @@ export async function POST(request: Request) {
         const hoursSinceHunger = (now - new Date(hungerSavedAt).getTime()) / 3_600_000
         const hoursSinceThirst = (now - new Date(thirstSavedAt).getTime()) / 3_600_000
 
-        // คำนวณ rate จาก trait special_effects
+        // คำนวณ rate จาก trait special_effects (ใช้ map ที่ดึงมาแล้ว)
         const traits: string[] = player.traits ?? []
-        // หา hunger_rate และ thirst_rate multiplier จาก trait_definitions
         let traitHungerMult = 1.0
         let traitThirstMult = 1.0
-        if (traits.length > 0) {
-          const { data: traitDefs } = await (supabase as any)
-            .from('trait_definitions')
-            .select('id, special_effects')
-            .in('id', traits)
-          for (const td of traitDefs ?? []) {
-            const fx = td.special_effects as Record<string, any> ?? {}
-            if (fx.hunger_rate) traitHungerMult *= fx.hunger_rate
-            if (fx.thirst_rate) traitThirstMult *= fx.thirst_rate
-          }
+        for (const tid of traits) {
+          const fx = traitDefsMap.get(tid) ?? {}
+          if (fx.hunger_rate) traitHungerMult *= fx.hunger_rate
+          if (fx.thirst_rate) traitThirstMult *= fx.thirst_rate
         }
         const hungerRate = HUNGER_PER_HOUR * traitHungerMult
         const thirstRate = THIRST_PER_HOUR * traitThirstMult
@@ -195,6 +196,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ ok: true, ...results })
   } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 })
+    console.error('[CRON ERROR]', err)
+    return NextResponse.json({ error: String(err), stack: err instanceof Error ? err.stack : undefined }, { status: 500 })
   }
 }

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
-import { spendAP, logEvent, getValidPlayer, getActiveGame, applyMoodleTriggers, checkAndDeclareWinner } from '@/lib/action-helpers'
+import { spendAP, logEvent, getValidPlayer, getActiveGame, applyMoodleTriggers, checkAndDeclareWinner, getTraitEffects } from '@/lib/action-helpers'
 
 const AP_COST = 5
 
@@ -47,14 +47,13 @@ export async function POST(request: Request) {
     const isForbidden = gridState?.is_forbidden ?? false
 
     const isSwamp = destGrid?.terrain === 'หนองน้ำ'
-    const hasSwimTrait = (player.traits ?? []).includes('ว่ายน้ำเก่ง')
+    // swim handled via traitFx below
 
-    const hasFastFeet = (player.traits ?? []).includes('เท้าเร็ว')
-    const hasWeakLegs = (player.traits ?? []).includes('ขาอ่อน')
-    let baseApCost = AP_COST
-    if (hasFastFeet) baseApCost -= 5
-    if (hasWeakLegs) baseApCost += 5
-    const apCost = isSwamp && !hasSwimTrait ? baseApCost + 15 : baseApCost
+    const traitFx = await getTraitEffects(supabase, player.traits ?? [])
+    const moveApBonus = traitFx.move_ap_bonus ?? 0
+    const swimTrait = traitFx.swim === true
+    const baseApCost = Math.max(0, AP_COST + moveApBonus)
+    const apCost = isSwamp && !swimTrait ? baseApCost + 15 : baseApCost
 
     const ap = await spendAP(supabase, player, apCost)
     if (!ap.ok) return NextResponse.json({ error: ap.msg }, { status: 400 })
@@ -99,7 +98,7 @@ export async function POST(request: Request) {
       }
     }
 
-    if (isSwamp && !hasSwimTrait) {
+    if (isSwamp && !swimTrait) {
       const moodles = player.moodles ?? []
       const hasSwampMoodle = moodles.find((m: any) => m.id === 'ลุยน้ำ')
       let newMoodles = hasSwampMoodle ? moodles : [...moodles, {
@@ -129,7 +128,7 @@ export async function POST(request: Request) {
     // ตรวจ winner ถ้าตายจากเขตอันตราย
     if (updateData.is_alive === false) await checkAndDeclareWinner(supabase, game_id)
 
-    return NextResponse.json({ ok: true, pos_x: x, pos_y: y, ap_cost: apCost, swamp: isSwamp && !hasSwimTrait, forbidden: isForbidden, hp: updateData.hp })
+    return NextResponse.json({ ok: true, pos_x: x, pos_y: y, ap_cost: apCost, swamp: isSwamp && !swimTrait, forbidden: isForbidden, hp: updateData.hp })
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 })
   }

@@ -1169,12 +1169,16 @@ export default function GameClient({
                         (selectedCell.x !== myPlayer.pos_x || selectedCell.y !== myPlayer.pos_y)
                       ) && (() => {
                         const isSwamp = grid?.terrain === 'หนองน้ำ'
-                        const hasSwim = (myPlayer.traits ?? []).includes('ว่ายน้ำเก่ง')
-                        const hasFastFeet = (myPlayer.traits ?? []).includes('เท้าเร็ว')
-                        const hasWeakLegs = (myPlayer.traits ?? []).includes('ขาอ่อน')
-                        let moveCost = 20
-                        if (hasFastFeet) moveCost -= 5
-                        if (hasWeakLegs) moveCost += 5
+                        // คำนวณ move cost จาก trait special_effects (ใช้ traits ที่โหลดมาแล้ว)
+                        const moveApBonus = (myPlayer.traits ?? []).reduce((sum: number, tid: string) => {
+                          const td = traits.find(t => t.id === tid)
+                          return sum + ((td?.special_effects as any)?.move_ap_bonus ?? 0)
+                        }, 0)
+                        const hasSwim = (myPlayer.traits ?? []).some((tid: string) => {
+                          const td = traits.find(t => t.id === tid)
+                          return (td?.special_effects as any)?.swim === true
+                        })
+                        let moveCost = Math.max(0, 5 + moveApBonus)
                         if (isSwamp && !hasSwim) moveCost += 15
                         // บวก moodle ap_cost_bonus
                         const moodleBonus = (myPlayer.moodles ?? []).reduce((sum: number, m: any) => {

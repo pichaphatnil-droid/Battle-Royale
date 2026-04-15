@@ -156,6 +156,12 @@ export default function AdminClient({ currentUserId, games, players, items: init
         pos_y: player?.pos_y ?? null,
         data: { name: player?.name ?? '?', cause: 'ปลอกคอระเบิด' },
       })
+      // ประกาศให้ทุกคนรู้
+      await (supabase as any).from('announcements').insert({
+        game_id: currentGame.id,
+        ann_type: 'อาจารย์ผู้ควบคุม',
+        message: `💥 ${player?.name ?? '?'} ถูกระเบิดปลอกคอ!`,
+      })
     }
     notify('✅ ดำเนินการแล้ว'); reload()
   }
@@ -1491,9 +1497,10 @@ function ZoneDeclare({ gameId, onDeclare, notify }: {
   }
 
   async function doClose() {
-    for (const z of zones) await onDeclare(gameId, z.x, z.y, false)
-    setForbiddenZones(prev => [...prev, ...zones])
-    setWarnedZones(prev => prev.filter(w => !zones.some(z => z.x === w.x && z.y === w.y)))
+    const toClose = zones.length > 0 ? zones : warnedZones
+    for (const z of toClose) await onDeclare(gameId, z.x, z.y, false)
+    setForbiddenZones(prev => [...prev, ...toClose])
+    setWarnedZones([])
     setStage('idle'); setZones([]); setCountdown(0)
   }
 
@@ -1528,33 +1535,20 @@ function ZoneDeclare({ gameId, onDeclare, notify }: {
           )}
         </div>
       )}
-      {stage === 'idle' && (
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-          <button onClick={doWarn} style={s.yellowBtn}>🎲 สุ่มและเตือน {COUNT} ช่อง</button>
-          {(warnedZones.length > 0 || forbiddenZones.length > 0) && (
-            <button onClick={doClearAll} style={{ ...s.redBtn, opacity: 0.7, fontSize: '11px' }}>🗑 ล้างทั้งหมด</button>
-          )}
-        </div>
-      )}
-      {stage === 'warned' && (
-        <>
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: '12px', color: 'var(--text-gold)', fontFamily: 'var(--font-mono)' }}>
-              ⏱ ปิดอัตโนมัติใน {mins}:{secs.toString().padStart(2,'0')}
-            </span>
-            <button onClick={doClose} style={s.redBtn}>🚫 ปิดเขตทันที</button>
-            <button onClick={doClearAll} style={{ ...s.redBtn, opacity: 0.7, fontSize: '11px' }}>🗑 ล้างทั้งหมด</button>
-            <button onClick={() => { setStage('idle'); setZones([]); setCountdown(0) }} style={{ ...s.yellowBtn, opacity:0.6 }}>ยกเลิก</button>
-          </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-            {zones.map((z, i) => (
-              <span key={i} style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', color: '#E67E22', background: 'rgba(230,126,34,0.1)', border: '1px solid #E67E22', padding: '2px 8px' }}>
-                ⚠ [{z.x},{z.y}]
-              </span>
-            ))}
-          </div>
-        </>
-      )}
+      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+        <button onClick={doWarn} style={s.yellowBtn}>🎲 สุ่มและเตือน {COUNT} ช่อง</button>
+        {warnedZones.length > 0 && (
+          <button onClick={doClose} style={s.redBtn}>🚫 ปิดเขตเฝ้าระวังทันที</button>
+        )}
+        {(warnedZones.length > 0 || forbiddenZones.length > 0) && (
+          <button onClick={doClearAll} style={{ ...s.redBtn, opacity: 0.7, fontSize: '11px' }}>🗑 ล้างทั้งหมด</button>
+        )}
+        {stage === 'warned' && countdown > 0 && (
+          <span style={{ fontSize: '12px', color: 'var(--text-gold)', fontFamily: 'var(--font-mono)' }}>
+            ⏱ ปิดอัตโนมัติใน {mins}:{secs.toString().padStart(2,'0')}
+          </span>
+        )}
+      </div>
     </div>
   )
 }

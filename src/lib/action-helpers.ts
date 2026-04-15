@@ -93,6 +93,30 @@ export async function getActiveGame(supabase: any, gameId: string) {
 }
 
 // ── ตรวจช่วงเวลาต่อสู้ (19:00–00:00 ไทย) ────────────────────
+
+// ── ดึง player + game พร้อมกันใน 1 round trip (2 parallel queries) ───────────
+export async function getPlayerAndGame(
+  supabase: any, userId: string, gameId: string
+): Promise<{ player: any | null; game: any | null; error?: string }> {
+  const [
+    { data: player },
+    { data: game },
+  ] = await Promise.all([
+    (supabase as any).from('players')
+      .select('*').eq('user_id', userId).eq('game_id', gameId)
+      .limit(1).maybeSingle(),
+    (supabase as any).from('games')
+      .select('*').eq('id', gameId).maybeSingle(),
+  ])
+
+  if (!game || !['กำลังเล่น','หยุดชั่วคราว'].includes(game.status))
+    return { player: null, game: null, error: 'ไม่มีเกมที่กำลังเล่น' }
+  if (!player) return { player: null, game, error: 'ไม่พบตัวละคร' }
+  if (!player.is_alive) return { player: null, game, error: 'ตัวละครเสียชีวิตแล้ว' }
+  if (player.is_banned) return { player: null, game, error: 'ถูกแบน' }
+  return { player, game }
+}
+
 export function isCombatTime(): boolean {
   const hour = (new Date().getUTCHours() + 7) % 24
   return hour >= 19 // 19:00–23:59 ไทย

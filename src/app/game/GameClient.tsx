@@ -88,25 +88,28 @@ export default function GameClient({
     setThirst(calculateCurrentThirst(myPlayer.thirst ?? 100, myPlayer.thirst_updated_at ?? new Date().toISOString(), myPlayer.traits ?? []))
 
     // โหลดประกาศล่าสุด 5 รายการ กรอง dismissed
-    void (supabase as any).from('announcements').select('*')
-      .eq('game_id', game.id)
-      .or(`target_id.is.null,target_id.eq.${myPlayer.id}`)
-      .order('occurred_at', { ascending: false })
-      .limit(5)
-      .then(({ data }: { data: any }) => {
-        if (!data) return
-        const key = `dismissed_ann_${game.id}`
-        const dismissed: string[] = JSON.parse(localStorage.getItem(key) ?? '[]')
-        setAnnouncements(data)
-        setToastAnns(data.filter((a: any) => !dismissed.includes(a.id)))
-      })
+    ;(async () => {
+      const { data } = await (supabase as any).from('announcements').select('*')
+        .eq('game_id', game.id)
+        .or(`target_id.is.null,target_id.eq.${myPlayer.id}`)
+        .order('occurred_at', { ascending: false })
+        .limit(5)
+      if (!data) return
+      const key = `dismissed_ann_${game.id}`
+      const dismissed: string[] = JSON.parse(localStorage.getItem(key) ?? '[]')
+      setAnnouncements(data)
+      setToastAnns(data.filter((a: any) => !dismissed.includes(a.id)))
+    })()
 
     // โหลด pending invites ที่ยังไม่หมดอายุ
-    (supabase as any).from('alliance_invites').select('*, from_player:from_player_id(name)')
-      .eq('to_player_id', myPlayer.id)
-      .eq('game_id', game.id)
-      .gt('expires_at', new Date().toISOString())
-      .then(({ data }: { data: any }) => { if (data) setPendingInvites(data) })
+    ;(async () => {
+      const { data } = await (supabase as any).from('alliance_invites')
+        .select('*, from_player:from_player_id(name)')
+        .eq('to_player_id', myPlayer.id)
+        .eq('game_id', game.id)
+        .gt('expires_at', new Date().toISOString())
+      if (data) setPendingInvites(data)
+    })()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── AP + countdown ทุก 10 วินาที ───────────────────────────
@@ -223,24 +226,24 @@ export default function GameClient({
         const g = payload.new as Game
         if (g?.id !== game.id) return
         if (g.status === 'จบแล้ว') {
-          (supabase as any).from('events')
-            .select('data')
-            .eq('game_id', game.id)
-            .eq('event_type', 'ชนะ')
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle()
-            .then(({ data }: { data: any }) => {
-              if (data?.data) {
-                setWinnerModal({
-                  name: data.data.winner_name,
-                  killCount: data.data.kill_count ?? 0,
-                  studentNumber: data.data.student_number ?? 0,
-                })
-              } else {
-                router.push('/lobby')
-              }
-            })
+          ;(async () => {
+            const { data } = await (supabase as any).from('events')
+              .select('data')
+              .eq('game_id', game.id)
+              .eq('event_type', 'ชนะ')
+              .order('occurred_at', { ascending: false })
+              .limit(1)
+              .maybeSingle()
+            if (data?.data) {
+              setWinnerModal({
+                name: data.data.winner_name,
+                killCount: data.data.kill_count ?? 0,
+                studentNumber: data.data.student_number ?? 0,
+              })
+            } else {
+              router.push('/lobby')
+            }
+          })()
         }
       })
       .on('postgres_changes', {
@@ -265,13 +268,13 @@ export default function GameClient({
         filter: `to_player_id=eq.${myPlayer.id}`,
       }, (payload: any) => {
         const invData: any = payload.new
-        void (supabase as any).from('players').select('name').eq('id', invData.from_player_id).single()
-          .then(({ data }: { data: any }) => {
-            setPendingInvites(prev => {
-              if (prev.some((p: any) => p.id === invData.id)) return prev
-              return [...prev, { ...invData, from_player: { name: data?.name ?? '?' } }]
-            })
+        ;(async () => {
+          const { data } = await (supabase as any).from('players').select('name').eq('id', invData.from_player_id).single()
+          setPendingInvites(prev => {
+            if (prev.some((p: any) => p.id === invData.id)) return prev
+            return [...prev, { ...invData, from_player: { name: data?.name ?? '?' } }]
           })
+        })()
       })
       .on('postgres_changes', {
         event: 'UPDATE', schema: 'public', table: 'alliances',
@@ -592,7 +595,7 @@ export default function GameClient({
           style={{ filter: 'drop-shadow(0 0 4px rgba(139,0,0,0.8))' }} />
         <span style={s.topTitle}>BR ACT</span>
         <span style={{ color: 'var(--text-secondary)', fontSize: '12px', fontFamily: 'var(--font-mono)' }}>
-          วัน {game.started_at ? Math.min(4, Math.ceil((Date.now() - new Date(game.started_at).getTime()) / 86_400_000)) : 1}/4
+          วัน {game.started_at && mounted ? Math.min(4, Math.ceil((Date.now() - new Date(game.started_at).getTime()) / 86_400_000)) : 1}/4
         </span>
         {timeLeft && (
           <span style={{ fontSize: '12px', fontFamily: 'var(--font-mono)', color: timeLeft === 'หมดเวลา' ? 'var(--red-bright)' : 'var(--text-gold)' }}>
@@ -2165,7 +2168,7 @@ function ChatMessages({ gameId, myPlayer, tab, allPlayers, myAlliance }: {
       q = q.eq('alliance_id', myAlliance.id)
     }
 
-    q.then(({ data }: { data: any }) => { if (data) setMessages(data) })
+    ;(async () => { const { data } = await q; if (data) setMessages(data) })()
 
     // Realtime — postgres_changes เท่านั้น
     const channel = supabase.channel(`chat-${gameId}-${tab}`)

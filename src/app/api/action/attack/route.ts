@@ -141,14 +141,27 @@ export async function POST(request: Request) {
     ]
 
     if (died) {
-      // drop inventory + attacker kill_count + attacker moodle
+      // drop inventory — ต้องดึง grid_state ก่อนเพื่อ merge dropped_items ที่มีอยู่
       const deadInventory: any[] = target.inventory ?? []
       if (deadInventory.length > 0 && target.pos_x !== null) {
+        const { data: existingGs } = await (supabase as any)
+          .from('grid_states').select('dropped_items')
+          .eq('game_id', game_id).eq('x', target.pos_x).eq('y', target.pos_y)
+          .maybeSingle()
         const expiresAt = new Date(Date.now() + 60 * 60_000).toISOString()
+        const existingDrops: any[] = existingGs?.dropped_items ?? []
+        const newDrops = [
+          ...existingDrops,
+          ...deadInventory.map((item: any) => ({
+            id: item.id, qty: item.qty,
+            dropped_by: target.name, dropped_by_id: target.id,
+            expires_at: expiresAt,
+          }))
+        ]
         writes.push(
           (supabase as any).from('grid_states').upsert(
-            { game_id, x: target.pos_x, y: target.pos_y, items: [], dropped_items: deadInventory.map((item: any) => ({ id: item.id, qty: item.qty, dropped_by: target.name, dropped_by_id: target.id, expires_at: expiresAt })) },
-            { onConflict: 'game_id,x,y', ignoreDuplicates: false }
+            { game_id, x: target.pos_x, y: target.pos_y, items: [], dropped_items: newDrops },
+            { onConflict: 'game_id,x,y' }
           )
         )
       }

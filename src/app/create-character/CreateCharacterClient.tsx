@@ -17,9 +17,9 @@ const STAT_LABEL: Record<Stat, string> = {
 const TOTAL_STAT = 45
 const TOTAL_TRAIT_POINTS = 5
 const MIN_STAT = 1
-const MAX_STAT = 8
+const MAX_STAT = 10 // ขยายเป็น 10 เพื่อให้กดชดเชยนิสัยลบได้
 
-// --- ระบบตรวจสอบนิสัยที่ขัดแย้งกัน (เพิ่มเข้าไปใหม่) ---
+// --- ระบบตรวจสอบนิสัยที่ขัดแย้งกัน ---
 const TRAIT_CONFLICTS: Record<string, string[]> = {
   'กระเพาะเล็ก': ['ตะกละตะกลาม'],
   'ตะกละตะกลาม': ['กระเพาะเล็ก'],
@@ -109,7 +109,7 @@ export default function CreateCharacterClient({ gameId, userId, availableMaleNum
   }, 0)
   const traitPointsLeft = TOTAL_TRAIT_POINTS - traitPointsUsed
 
-  // คำนวณ stat_effects จาก traits ทั้งหมด (เพื่อใช้แสดงผลและบันทึก)
+  // คำนวณ stat_effects จาก traits ทั้งหมด
   const traitStatBonus = useMemo(() => {
     const bonus: Record<string, number> = {}
     const allActiveTraits = [...bg.startTraits, ...selectedTraits]
@@ -123,9 +123,10 @@ export default function CreateCharacterClient({ gameId, userId, availableMaleNum
     return bonus
   }, [bg, selectedTraits, traits])
 
-  // ฟังก์ชันหาค่าสุทธิ (Base + BG Bonus + Trait Effects)
+  // ฟังก์ชันหาค่าสุทธิ (Base + BG Bonus + Trait Effects) และกันค่าติดลบ
   const getFinalStat = (s: Stat) => {
-    return stats[s] + (bg.bonus[s] ?? 0) + (traitStatBonus[s] ?? 0)
+    const total = stats[s] + (bg.bonus[s] ?? 0) + (traitStatBonus[s] ?? 0)
+    return Math.max(1, total) // สเตตัสห้ามต่ำกว่า 1
   }
 
   // คำนวณแต้มสถานะ
@@ -133,7 +134,7 @@ export default function CreateCharacterClient({ gameId, userId, availableMaleNum
   const statPointsLeft = TOTAL_STAT - statPointsUsed
 
   function setStat(s: Stat, val: number) {
-    const clamped = Math.max(MIN_STAT, Math.min(MAX_STAT, val))
+    const clamped = Math.max(MIN_STAT, Math.min(MAX_STAT, val)) // MAX_STAT เป็น 10 แล้ว
     const newStats = { ...stats, [s]: clamped }
     if (Object.values(newStats).reduce((a, b) => a + b, 0) > TOTAL_STAT) return
     setStats(newStats)
@@ -193,7 +194,6 @@ export default function CreateCharacterClient({ gameId, userId, availableMaleNum
       { id: 'ผ้าพันแผล', qty: 1 },
     ]
 
-    // ใช้ RPC เพื่อสุ่มอาวุธแบบไม่ซ้ำกัน
     const { error: err } = await (supabase as any).rpc('create_player_with_unique_weapon', {
       p_game_id: gameId,
       p_user_id: userId,
@@ -451,6 +451,7 @@ export default function CreateCharacterClient({ gameId, userId, availableMaleNum
                 const base = stats[stat]
                 const final = getFinalStat(stat)
                 const bonusFromTrait = traitStatBonus[stat] ?? 0
+                const bonusFromBg = bg.bonus[stat] ?? 0
                 return (
                   <div key={stat} style={{ display:'flex', alignItems:'center', gap:'8px' }}>
                     <span style={{ fontSize:'11px', color:'var(--text-secondary)', width:'72px', flexShrink:0 }}>
@@ -458,6 +459,7 @@ export default function CreateCharacterClient({ gameId, userId, availableMaleNum
                     </span>
                     <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
                       <button onClick={() => setStat(stat, base-1)} style={s.statBtn}>−</button>
+                      {/* แสดงค่าสุทธิที่ผู้เล่นอยากเห็น */}
                       <span style={{ fontFamily:'var(--font-mono)', fontSize:'16px', fontWeight:700,
                         minWidth:'28px', textAlign:'center' }}>{final}</span>
                       <button onClick={() => setStat(stat, base+1)} style={s.statBtn}>+</button>
@@ -465,9 +467,11 @@ export default function CreateCharacterClient({ gameId, userId, availableMaleNum
                     <div style={{ flex:1, height:'4px', background:'var(--bg-primary)', border:'1px solid var(--border)', marginLeft:'8px' }}>
                       <div style={{ height:'100%', background:'var(--red-bright)', width:`${Math.min(100, final*10)}%`, transition:'width 0.2s' }} />
                     </div>
-                    {bonusFromTrait !== 0 && (
-                      <span style={{ fontSize:'10px', color: bonusFromTrait > 0 ? 'var(--green-bright)' : 'var(--red-bright)', fontFamily:'var(--font-mono)', marginLeft:'6px' }}>
-                        {bonusFromTrait > 0 ? `+${bonusFromTrait}` : bonusFromTrait}
+                    {/* แสดงรายละเอียดว่าเราอัป Base ไปเท่าไหร่แล้ว */}
+                    <span style={{ fontSize:'9px', color:'var(--text-secondary)', minWidth:'45px' }}>[กด: {base}]</span>
+                    {(bonusFromTrait !== 0 || bonusFromBg !== 0) && (
+                      <span style={{ fontSize:'10px', color: (bonusFromTrait + bonusFromBg) > 0 ? 'var(--green-bright)' : 'var(--red-bright)', fontFamily:'var(--font-mono)', marginLeft:'4px' }}>
+                        { (bonusFromTrait + bonusFromBg) > 0 ? `+${bonusFromTrait + bonusFromBg}` : (bonusFromTrait + bonusFromBg) }
                       </span>
                     )}
                   </div>

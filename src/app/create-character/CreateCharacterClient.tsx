@@ -138,21 +138,39 @@ export default function CreateCharacterClient({ gameId, userId, availableMaleNum
   async function submit() {
     setLoading(true); setError(null)
     const bonusStats = bg.bonus
+    // รวม stat_effects จาก traits ที่เลือกทั้งหมด
+    const allTraitsForCalc = [...bg.startTraits, ...selectedTraits]
+    const traitStatBonus: Record<string, number> = {}
+    for (const tid of allTraitsForCalc) {
+      const def = traits.find(t => t.id === tid)
+      if (!def?.stat_effects) continue
+      for (const [stat, val] of Object.entries(def.stat_effects)) {
+        traitStatBonus[stat] = (traitStatBonus[stat] ?? 0) + (val as number)
+      }
+    }
+    const ts = (s: string) => traitStatBonus[s] ?? 0
+    const finalEnd = stats.end_stat + (bonusStats.end_stat ?? 0) + ts('end_stat')
+    // max_hp_bonus จาก special_effects (เช่น มนุษย์เหล็กไหล +20, ขี้โรค -20)
+    const maxHpBonus = allTraitsForCalc.reduce((sum, tid) => {
+      const def = traits.find(t => t.id === tid)
+      return sum + ((def?.special_effects as any)?.max_hp_bonus ?? 0)
+    }, 0)
+    const baseMaxHp = 50 + finalEnd * 5 + maxHpBonus
     const { error: err } = await (supabase as any).from('players').insert({
       game_id: gameId, user_id: userId,
       name: name.trim(), student_number: studentNum, gender,
       photo_url: photoUrl || null,
-      max_hp: 50 + (stats.end_stat + (bonusStats.end_stat ?? 0)) * 5,
-      hp:     50 + (stats.end_stat + (bonusStats.end_stat ?? 0)) * 5,
-      str:      stats.str      + (bonusStats.str      ?? 0),
-      agi:      stats.agi      + (bonusStats.agi      ?? 0),
-      int:      stats.int      + (bonusStats.int      ?? 0),
-      per:      stats.per      + (bonusStats.per      ?? 0),
-      cha:      stats.cha      + (bonusStats.cha      ?? 0),
-      end_stat: stats.end_stat + (bonusStats.end_stat ?? 0),
-      stl:      stats.stl      + (bonusStats.stl      ?? 0),
-      lck:      stats.lck      + (bonusStats.lck      ?? 0),
-      traits: allTraits, inventory: getStarterItems(), moodles: [], known_recipes: [],
+      max_hp: baseMaxHp,
+      hp:     baseMaxHp,
+      str:      stats.str      + (bonusStats.str      ?? 0) + ts('str'),
+      agi:      stats.agi      + (bonusStats.agi      ?? 0) + ts('agi'),
+      int:      stats.int      + (bonusStats.int      ?? 0) + ts('int'),
+      per:      stats.per      + (bonusStats.per      ?? 0) + ts('per'),
+      cha:      stats.cha      + (bonusStats.cha      ?? 0) + ts('cha'),
+      end_stat: finalEnd,
+      stl:      stats.stl      + (bonusStats.stl      ?? 0) + ts('stl'),
+      lck:      stats.lck      + (bonusStats.lck      ?? 0) + ts('lck'),
+      traits: [...bg.startTraits, ...selectedTraits], inventory: getStarterItems(), moodles: [], known_recipes: [],
       pos_x: startPos.x, pos_y: startPos.y,
     })
     if (err) {

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
@@ -19,24 +19,21 @@ const TOTAL_TRAIT_POINTS = 5
 const MIN_STAT = 1
 const MAX_STAT = 8
 
-// ใช้ bonus_points จาก DB แทน hardcode
-// helper เรียกใช้ใน component
-
 const BACKGROUNDS: Array<{
   id: string; name: string; desc: string
   startTraits: string[]
   bonus: Partial<Record<Stat, number>>
 }> = [
-  { id:'นักกีฬา',       name:'นักกีฬา',         desc:'เล่นกีฬามาตลอด ร่างกายดี ขาแข็งแรง',          startTraits:['น่องเหล็ก','แข็งแรง'],          bonus:{ str:1, end_stat:1 } },
-  { id:'อันธพาล',       name:'อันธพาล',         desc:'ชีวิตช่วงมัธยมฯ ไม่ค่อยสงบ ต่อยเก่งเป็นพิเศษ', startTraits:['บ้าระห่ำ','สายซุ่ม'],           bonus:{ str:2 } },
-  { id:'นักเรียนตัวอย่าง',   name:'นักเรียนตัวอย่าง',     desc:'เป็นผู้นำตั้งแต่เด็ก ทุกคนเชื่อฟัง',          startTraits:['พหูสูต','หยั่งรู้'],            bonus:{ cha:1, per:1 } },
+  { id:'นักกีฬา',       name:'นักกีฬา',          desc:'เล่นกีฬามาตลอด ร่างกายดี ขาแข็งแรง',          startTraits:['น่องเหล็ก','แข็งแรง'],           bonus:{ str:1, end_stat:1 } },
+  { id:'อันธพาล',       name:'อันธพาล',          desc:'ชีวิตช่วงมัธยมฯ ไม่ค่อยสงบ ต่อยเก่งเป็นพิเศษ', startTraits:['บ้าระห่ำ','สายซุ่ม'],            bonus:{ str:2 } },
+  { id:'นักเรียนตัวอย่าง',   name:'นักเรียนตัวอย่าง',     desc:'เป็นผู้นำตั้งแต่เด็ก ทุกคนเชื่อฟัง',          startTraits:['พหูสูต','หยั่งรู้'],             bonus:{ cha:1, per:1 } },
   { id:'เด็กห้องสมุด',  name:'เด็กห้องสมุด',    desc:'อ่านหนังสือทุกวัน ความรู้ท่วมหัวอาจเอาตัวไม่รอด',        startTraits:['เรียนเก่ง','อัจฉริยะจอมขี้เกียจ'], bonus:{ int:2 } },
   { id:'นักเรียนพยาบาล',name:'นักเรียนพยาบาล',  desc:'เรียนมาทางสายสุขภาพ รู้จักยาทุกชนิด',          startTraits:['ผู้รักษา','ช่างฝีมือ'],          bonus:{ int:1, end_stat:1 } },
   { id:'ดาวโรงเรียน',   name:'ดาวโรงเรียน',     desc:'เป็นที่รู้จักทั่วโรงเรียน ใคร ๆ ก็ชอบ',        startTraits:['ดาวโรงเรียน','นักเจรจา'],        bonus:{ cha:2 } },
   { id:'โอตาคุ',        name:'โอตาคุ',          desc:'ดูอนิเมะมาเยอะ รู้กลยุทธ์การซุ่มโจมตีดี',      startTraits:['นกฮูกกลางคืน','สายซุ่ม'],        bonus:{ stl:2 } },
   { id:'สายมู',     name:'สายมู',       desc:'ดวงดีสุดในห้อง สอบตกก็ยังรอดได้ทุกครั้ง',    startTraits:['โชคช่วย','ใช้มือเก่ง'],          bonus:{ lck:2 } },
   { id:'นักเรียนแลกเปลี่ยน', name:'นักเรียนแลกเปลี่ยน', desc:'ผ่านโลกมามาก อ่านคนออก สื่อสารเก่ง', startTraits:['พี่เลี้ยง','สายตาเหยี่ยว'],      bonus:{ cha:1, per:1 } },
-  { id:'ลูกเสือ',       name:'ลูกเสือ',         desc:'เข้าค่ายมาเยอะ ทนทาน แบกของไหวแน่นอน',            startTraits:['บ้าหอบฟาง','ว่ายน้ำเก่ง'],        bonus:{ str:1, end_stat:1 } },
+  { id:'ลูกเสือ',       name:'ลูกเสือ',          desc:'เข้าค่ายมาเยอะ ทนทาน แบกของไหวแน่นอน',             startTraits:['บ้าหอบฟาง','ว่ายน้ำเก่ง'],        bonus:{ str:1, end_stat:1 } },
 ]
 
 const TYPE_LABEL: Record<TraitType, string> = {
@@ -77,23 +74,44 @@ export default function CreateCharacterClient({ gameId, userId, availableMaleNum
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string|null>(null)
 
-  // คำนวณแต้มนิสัย — บวกใช้แต้ม 2, ลบคืนแต้มตาม bonus_points
+  // --- Logic คำนวณแต้มและผลกระทบ (Memoized) ---
+  
   const getTraitCost = (id: string) => {
     const def = traits.find(t => t.id === id)
-    if (!def) return 0
-    return def.type === 'ลบ' ? 0 : 2
+    if (!def || def.type === 'ลบ') return 0
+    return def.bonus_points ?? 2 // ใช้ bonus_points จาก DB
   }
+
   const getTraitRefund = (id: string) => {
     const def = traits.find(t => t.id === id)
     if (!def || def.type !== 'ลบ') return 0
     return def.bonus_points ?? 2
   }
+
   const traitPointsUsed = selectedTraits.reduce((acc, id) => {
     return acc + getTraitCost(id) - getTraitRefund(id)
   }, 0)
   const traitPointsLeft = TOTAL_TRAIT_POINTS - traitPointsUsed
 
-  // คำนวณแต้มสถานะ
+  // คำนวณ stat_effects จาก traits ทั้งหมด
+  const traitStatBonus = useMemo(() => {
+    const bonus: Record<string, number> = {}
+    const allActiveTraits = [...bg.startTraits, ...selectedTraits]
+    for (const tid of allActiveTraits) {
+      const def = traits.find(t => t.id === tid)
+      if (!def?.stat_effects) continue
+      for (const [stat, val] of Object.entries(def.stat_effects)) {
+        bonus[stat] = (bonus[stat] ?? 0) + (val as number)
+      }
+    }
+    return bonus
+  }, [bg, selectedTraits, traits])
+
+  // ฟังก์ชันหาค่าสุทธิ (Base + BG + Traits)
+  const getFinalStat = (s: Stat) => {
+    return stats[s] + (bg.bonus[s] ?? 0) + (traitStatBonus[s] ?? 0)
+  }
+
   const statPointsUsed = Object.values(stats).reduce((a, b) => a + b, 0)
   const statPointsLeft = TOTAL_STAT - statPointsUsed
 
@@ -114,13 +132,15 @@ export default function CreateCharacterClient({ gameId, userId, availableMaleNum
     const isNeg = def?.type === 'ลบ'
     const isSelected = selectedTraits.includes(id)
     if (isSelected) { setSelectedTraits(prev => prev.filter(x => x !== id)); return }
-    if (!isNeg && traitPointsLeft < 2) return
+    
+    // เช็คแต้มก่อนเลือก (ยกเว้นนิสัยเสีย)
+    const cost = getTraitCost(id)
+    if (!isNeg && traitPointsLeft < cost) return
     setSelectedTraits(prev => [...prev, id])
   }
 
   const allTraits = [...new Set([...bg.startTraits, ...selectedTraits])]
 
-  // ── ไอเทมเริ่มต้น — สุ่มอาวุธไม่ซ้ำกัน ──────────────────────
   function getStarterItems(): Array<{id:string,qty:number}> {
     const base = [
       { id: 'ขวดน้ำ', qty: 2 },
@@ -128,8 +148,6 @@ export default function CreateCharacterClient({ gameId, userId, availableMaleNum
       { id: 'ผ้าพันแผล', qty: 1 },
     ]
     if (weapons.length === 0) return base
-
-    // สุ่มอาวุธ 1 ชิ้นจากทั้งหมด
     const shuffled = [...weapons].sort(() => Math.random() - 0.5)
     const picked = shuffled[0]
     return [...base, { id: picked.id, qty: 1 }]
@@ -137,42 +155,35 @@ export default function CreateCharacterClient({ gameId, userId, availableMaleNum
 
   async function submit() {
     setLoading(true); setError(null)
-    const bonusStats = bg.bonus
-    // รวม stat_effects จาก traits ที่เลือกทั้งหมด
+    
+    // คำนวณ Max HP
     const allTraitsForCalc = [...bg.startTraits, ...selectedTraits]
-    const traitStatBonus: Record<string, number> = {}
-    for (const tid of allTraitsForCalc) {
-      const def = traits.find(t => t.id === tid)
-      if (!def?.stat_effects) continue
-      for (const [stat, val] of Object.entries(def.stat_effects)) {
-        traitStatBonus[stat] = (traitStatBonus[stat] ?? 0) + (val as number)
-      }
-    }
-    const ts = (s: string) => traitStatBonus[s] ?? 0
-    const finalEnd = stats.end_stat + (bonusStats.end_stat ?? 0) + ts('end_stat')
-    // max_hp_bonus จาก special_effects (เช่น มนุษย์เหล็กไหล +20, ขี้โรค -20)
     const maxHpBonus = allTraitsForCalc.reduce((sum, tid) => {
       const def = traits.find(t => t.id === tid)
       return sum + ((def?.special_effects as any)?.max_hp_bonus ?? 0)
     }, 0)
+    
+    const finalEnd = getFinalStat('end_stat')
     const baseMaxHp = 50 + finalEnd * 5 + maxHpBonus
+
     const { error: err } = await (supabase as any).from('players').insert({
       game_id: gameId, user_id: userId,
       name: name.trim(), student_number: studentNum, gender,
       photo_url: photoUrl || null,
       max_hp: baseMaxHp,
-      hp:     baseMaxHp,
-      str:      stats.str      + (bonusStats.str      ?? 0) + ts('str'),
-      agi:      stats.agi      + (bonusStats.agi      ?? 0) + ts('agi'),
-      int:      stats.int      + (bonusStats.int      ?? 0) + ts('int'),
-      per:      stats.per      + (bonusStats.per      ?? 0) + ts('per'),
-      cha:      stats.cha      + (bonusStats.cha      ?? 0) + ts('cha'),
+      hp:      baseMaxHp,
+      str:      getFinalStat('str'),
+      agi:      getFinalStat('agi'),
+      int:      getFinalStat('int'),
+      per:      getFinalStat('per'),
+      cha:      getFinalStat('cha'),
       end_stat: finalEnd,
-      stl:      stats.stl      + (bonusStats.stl      ?? 0) + ts('stl'),
-      lck:      stats.lck      + (bonusStats.lck      ?? 0) + ts('lck'),
+      stl:      getFinalStat('stl'),
+      lck:      getFinalStat('lck'),
       traits: [...bg.startTraits, ...selectedTraits], inventory: getStarterItems(), moodles: [], known_recipes: [],
       pos_x: startPos.x, pos_y: startPos.y,
     })
+    
     if (err) {
       setError(err.message.includes('unique') ? 'หมายเลขนักเรียนนี้ถูกใช้ไปแล้ว' : 'เกิดข้อผิดพลาด: ' + err.message)
       setLoading(false); return
@@ -324,8 +335,8 @@ export default function CreateCharacterClient({ gameId, userId, availableMaleNum
                   {group.list.map(trait => {
                     const isNeg = trait.type === 'ลบ'
                     const isSelected = selectedTraits.includes(trait.id)
-                    const cost = isNeg ? (trait.bonus_points ?? 2) : 2
-                    const canAfford = isNeg || isSelected || traitPointsLeft >= 2
+                    const cost = isNeg ? (trait.bonus_points ?? 2) : (trait.bonus_points ?? 2)
+                    const canAfford = isNeg || isSelected || traitPointsLeft >= cost
                     return (
                       <button key={trait.id} onClick={() => toggleTrait(trait.id)} style={{
                         width:'100%', padding:'8px 10px', border:'1px solid', textAlign:'left',
@@ -388,7 +399,7 @@ export default function CreateCharacterClient({ gameId, userId, availableMaleNum
               <div>🏃 <b style={{ color:'var(--text-primary)' }}>AGI (คล่องแคล่ว)</b> — เพิ่มโอกาสหลบการโจมตี</div>
               <div>🧠 <b style={{ color:'var(--text-primary)' }}>INT (ฉลาด)</b> — ปลดล็อกสูตรคราฟต์ที่ซับซ้อน และเพิ่มประสิทธิภาพของยา</div>
               <div>👁 <b style={{ color:'var(--text-primary)' }}>PER (รับรู้)</b> — เพิ่มระยะมองเห็นบนแผนที่ และความเสียหายโจมตีระยะไกล</div>
-              <div>💬 <b style={{ color:'var(--text-primary)' }}>CHA (เสน่ห์)</b> — เพิ่มโอกาสหลบเล็กน้อย เพราะอ่านจังหวะคนออก และใช้ในระบบพันธมิตร</div>
+              <div>💬 <b style={{ color:'var(--text-primary)' }}>CHA (เสน่ห์)</b> — อ่านจังหวะคนออกทำให้หลบหลีกได้ดี และใช้ในระบบพันธมิตร</div>
               <div>❤ <b style={{ color:'var(--text-primary)' }}>END (อดทน)</b> — เพิ่ม HP สูงสุด +5 ต่อ 1 แต้ม และลดความเสียหายที่รับ</div>
               <div>🌑 <b style={{ color:'var(--text-primary)' }}>STL (พรางตัว)</b> — เพิ่มโอกาสหลบการโจมตี และทำให้ศัตรูตรวจจับได้ยากขึ้น</div>
               <div>🍀 <b style={{ color:'var(--text-primary)' }}>LCK (โชค)</b> — เพิ่มโอกาสโจมตีคริติคอล (คูณความเสียหาย ×2)</div>
@@ -397,8 +408,8 @@ export default function CreateCharacterClient({ gameId, userId, availableMaleNum
             <div style={{ display:'flex', flexDirection:'column', gap:'8px', marginBottom:'16px' }}>
               {STATS.map(stat => {
                 const base = stats[stat]
-                const bonus = bg.bonus[stat] ?? 0
-                const total = base + bonus
+                const final = getFinalStat(stat)
+                const bonusFromTrait = traitStatBonus[stat] ?? 0
                 return (
                   <div key={stat} style={{ display:'flex', alignItems:'center', gap:'8px' }}>
                     <span style={{ fontSize:'11px', color:'var(--text-secondary)', width:'72px', flexShrink:0 }}>
@@ -407,14 +418,17 @@ export default function CreateCharacterClient({ gameId, userId, availableMaleNum
                     <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
                       <button onClick={() => setStat(stat, base-1)} style={s.statBtn}>−</button>
                       <span style={{ fontFamily:'var(--font-mono)', fontSize:'16px', fontWeight:700,
-                        minWidth:'28px', textAlign:'center' }}>{total}</span>
+                        minWidth:'28px', textAlign:'center' }}>{final}</span>
                       <button onClick={() => setStat(stat, base+1)} style={s.statBtn}>+</button>
                     </div>
                     <div style={{ flex:1, height:'4px', background:'var(--bg-primary)', border:'1px solid var(--border)', marginLeft:'8px' }}>
-                      <div style={{ height:'100%', background:'var(--red-bright)', width:`${total*10}%`, transition:'width 0.2s' }} />
+                      <div style={{ height:'100%', background:'var(--red-bright)', width:`${Math.min(100, final*10)}%`, transition:'width 0.2s' }} />
                     </div>
-                    {bonus > 0 && (
-                      <span style={{ fontSize:'10px', color:'var(--text-gold)', fontFamily:'var(--font-mono)', marginLeft:'6px' }}>+{bonus}</span>
+                    {/* แสดงโบนัสจาก Traits แยกระบุให้ผู้เล่นเห็น */}
+                    {bonusFromTrait !== 0 && (
+                      <span style={{ fontSize:'10px', color: bonusFromTrait > 0 ? 'var(--green-bright)' : 'var(--red-bright)', fontFamily:'var(--font-mono)', marginLeft:'6px' }}>
+                        {bonusFromTrait > 0 ? `+${bonusFromTrait}` : bonusFromTrait}
+                      </span>
                     )}
                   </div>
                 )
@@ -423,8 +437,8 @@ export default function CreateCharacterClient({ gameId, userId, availableMaleNum
 
             <div style={{ display:'flex', gap:'8px' }}>
               <button onClick={() => setStep(2)} style={s.backBtn}>← กลับ</button>
-              <button onClick={() => setStep(4)} disabled={statPointsLeft < 0}
-                style={{ ...s.nextBtn, flex:1, opacity: statPointsLeft >= 0 ? 1 : 0.4 }}>
+              <button onClick={() => setStep(4)} disabled={statPointsLeft !== 0}
+                style={{ ...s.nextBtn, flex:1, opacity: statPointsLeft === 0 ? 1 : 0.4 }}>
                 ถัดไป — ยืนยัน →
               </button>
             </div>
@@ -457,14 +471,14 @@ export default function CreateCharacterClient({ gameId, userId, availableMaleNum
               </div>
             </div>
 
-            <div style={s.groupLabel}>ค่าสถานะ</div>
+            <div style={s.groupLabel}>ค่าสถานะสุทธิ</div>
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'4px', marginBottom:'16px' }}>
               {STATS.map(stat => (
                 <div key={stat} style={{ display:'flex', justifyContent:'space-between', padding:'4px 8px',
                   background:'var(--bg-tertiary)', border:'1px solid var(--border)' }}>
                   <span style={{ fontSize:'11px', color:'var(--text-secondary)' }}>{STAT_LABEL[stat]}</span>
                   <span style={{ fontFamily:'var(--font-mono)', fontSize:'13px', fontWeight:700 }}>
-                    {stats[stat] + (bg.bonus[stat] ?? 0)}
+                    {getFinalStat(stat)}
                   </span>
                 </div>
               ))}
@@ -480,8 +494,7 @@ export default function CreateCharacterClient({ gameId, userId, availableMaleNum
             </div>
 
             {error && (
-              <div style={{ padding:'10px 12px', background:'rgba(139,0,0,0.1)', borderLeft:'3px solid var(--red-blood)',
-                border:'1px solid var(--red-blood)', color:'var(--red-bright)', fontSize:'12px', marginBottom:'12px' }}>
+              <div style={{ padding:'10px 12px', background:'rgba(139,0,0,0.1)', border:'1px solid var(--red-blood)', color:'var(--red-bright)', fontSize:'12px', marginBottom:'12px' }}>
                 ⚠ {error}
               </div>
             )}

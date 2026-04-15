@@ -260,6 +260,7 @@ export async function applyStatThresholdMoodles(
   const hpPct = maxHp > 0 ? (hp / maxHp) * 100 : 100
 
   for (const def of defs) {
+    if (!def.trigger) continue
     const t = def.trigger as any
     if (t.event !== 'stat_threshold') continue
 

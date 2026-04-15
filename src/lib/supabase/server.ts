@@ -1,41 +1,40 @@
-import { createServer } from 'http'
-import { parse } from 'url'
-import next from 'next'
-import cron from 'node-cron'
+import { createServerClient } from '@supabase/ssr'
+import { createClient as createSupabaseClient } from '@supabase/supabase-js'
+import { cookies } from 'next/headers'
+import type { Database } from './types'
 
-const dev = process.env.NODE_ENV !== 'production'
-const app = next({ dev })
-const handle = app.getRequestHandler()
-
-app.prepare().then(() => {
-  // ── Cron: ทุก 10 นาที → POST /api/cron/tick ──────────────
-  cron.schedule('*/10 * * * *', async () => {
-    try {
-      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? `http://localhost:${process.env.PORT ?? 3000}`
-      const res = await fetch(`${baseUrl}/api/cron/tick`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-cron-secret': process.env.CRON_SECRET ?? '',
+// ใช้ใน Server Components และ API Routes (anon key — RLS บังคับใช้)
+export async function createClient() {
+  const cookieStore = await cookies()
+  return createServerClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() { return cookieStore.getAll() },
+        setAll(cookiesToSet: Array<{ name: string; value: string; options: any }>) {
+          try {
+            cookiesToSet.forEach(({ name, value, options }) =>
+              cookieStore.set(name, value, options)
+            )
+          } catch {}
         },
-      })
-      const data = await res.json()
-      console.log('[CRON TICK]', new Date().toISOString(), data)
-    } catch (err) {
-      console.error('[CRON ERROR]', err)
+      },
     }
-  }, {
-    timezone: 'Asia/Bangkok',
-  })
+  )
+}
 
-  console.log('[CRON] Scheduled tick every 10 minutes (Asia/Bangkok)')
-
-  // ── HTTP Server ──────────────────────────────────────────
-  const port = parseInt(process.env.PORT ?? '3000', 10)
-  createServer((req, res) => {
-    const parsedUrl = parse(req.url ?? '/', true)
-    handle(req, res, parsedUrl)
-  }).listen(port, () => {
-    console.log(`> Ready on http://localhost:${port}`)
-  })
-})
+// ใช้ใน API Routes ที่ต้องการสิทธิ์ service role (bypass RLS จริงๆ)
+// เฉพาะ server-side เท่านั้น ห้ามใช้ใน client
+export function createServiceClient() {
+  return createSupabaseClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    }
+  )
+}

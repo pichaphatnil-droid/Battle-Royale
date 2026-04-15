@@ -48,6 +48,7 @@ export default function GameClient({
   const [hunger, setHunger] = useState(initialPlayer.hunger ?? 100)
   const [thirst, setThirst] = useState(initialPlayer.thirst ?? 100)
   const [mounted, setMounted] = useState(false)
+  const [now, setNow] = useState(Date.now())
   const [selectedWeapon, setSelectedWeapon] = useState<string|null>(null)
   const [attackTarget, setAttackTarget] = useState<string|null>(null)
   const [invSort, setInvSort] = useState<'default'|'name'|'category'|'weight'>('default')
@@ -115,6 +116,7 @@ export default function GameClient({
   // ── AP + countdown ทุก 10 วินาที ───────────────────────────
   useEffect(() => {
     function tick() {
+      setNow(Date.now())
       setAp(calculateCurrentAP(myPlayer.ap, myPlayer.ap_updated_at))
       setHunger(calculateCurrentHunger(myPlayer.hunger ?? 100, myPlayer.hunger_updated_at ?? new Date().toISOString(), myPlayer.traits ?? []))
       setThirst(calculateCurrentThirst(myPlayer.thirst ?? 100, myPlayer.thirst_updated_at ?? new Date().toISOString(), myPlayer.traits ?? []))
@@ -1095,7 +1097,7 @@ export default function GameClient({
                     {(() => {
                       const drops: any[] = gs?.dropped_items ?? []
                       const validDrops = drops.filter(d =>
-                        !d.expires_at || new Date(d.expires_at).getTime() > Date.now()
+                        !d.expires_at || new Date(d.expires_at).getTime() > now
                       )
                       if (validDrops.length === 0) return null
                       const isHere = selectedCell.x === myPlayer.pos_x && selectedCell.y === myPlayer.pos_y
@@ -1105,7 +1107,7 @@ export default function GameClient({
                           <div style={{ maxHeight: '160px', overflowY: 'auto' }}>
                           {validDrops.map((drop: any, i: number) => {
                             const minsLeft = drop.expires_at
-                              ? Math.max(0, Math.ceil((new Date(drop.expires_at).getTime() - Date.now()) / 60_000))
+                              ? Math.max(0, Math.ceil((new Date(drop.expires_at).getTime() - now) / 60_000))
                               : null
                             const hoursLeft = minsLeft !== null ? Math.floor(minsLeft / 60) : null
                             const timeStr = hoursLeft !== null
@@ -1663,7 +1665,7 @@ function MapPanel({ grids, gridStates, allPlayers, myPlayer, visibleCells, selec
                         </div>
                       )
                     })()}
-                    {isVisible && (gs?.dropped_items?.length ?? 0) > 0 && (
+                    {isVisible && (gs?.dropped_items ?? []).filter((d: any) => !d.expires_at || new Date(d.expires_at).getTime() > Date.now()).length > 0 && (
                       <span style={{ position:'absolute', top:'1px', left:'2px', fontSize:'10px', color:'#E67E22' }}>◎</span>
                     )}
                     {isVisible && (

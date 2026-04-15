@@ -242,7 +242,9 @@ export default function AdminClient({ currentUserId, games, players, items: init
   }
 
   const currentGame = games.find(g => ['รอผู้เล่น','กำลังเล่น','หยุดชั่วคราว'].includes(g.status))
-  const gamePlayers = players.filter(p => p.game_id === currentGame?.id)
+  const gamePlayers = players
+    .filter(p => p.game_id === currentGame?.id)
+    .sort((a, b) => (a.student_number ?? 0) - (b.student_number ?? 0));
 
   return (
     <>

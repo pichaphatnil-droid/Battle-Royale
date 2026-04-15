@@ -16,23 +16,30 @@ export async function POST(request: Request) {
   const results: Record<string, unknown> = {}
 
   try {
+    results.stage = 'init'
     // ── ดึงเกมที่กำลังเล่น ────────────────────────────────────
-    const { data: games } = await (supabase as any)
+    const { data: games, error: gamesErr } = await (supabase as any)
       .from('games')
       .select('id')
       .eq('status', 'กำลังเล่น')
+    if (gamesErr) throw new Error(`games query: ${gamesErr.message}`)
+    results.stage = 'got_games'
 
     // ── ดึง moodle_definitions ที่มี level_effects มีผล HP ──
     // ใช้ครั้งเดียวนอก loop เพื่อประหยัด query
-    const { data: moodleDefs } = await (supabase as any)
+    const { data: moodleDefs, error: moodleErr } = await (supabase as any)
       .from('moodle_definitions')
       .select('id, level_effects, trigger')
       .eq('is_active', true)
+    if (moodleErr) throw new Error(`moodle query: ${moodleErr.message}`)
+    results.stage = 'got_moodledefs'
 
     // ── ดึง trait_definitions ครั้งเดียวสำหรับทุก player ────────
-    const { data: allTraitDefs } = await (supabase as any)
+    const { data: allTraitDefs, error: traitErr } = await (supabase as any)
       .from('trait_definitions')
       .select('id, special_effects')
+    if (traitErr) throw new Error(`trait query: ${traitErr.message}`)
+    results.stage = 'got_traitdefs'
     const traitDefsMap = new Map<string, Record<string,any>>(
       (allTraitDefs ?? []).map((t: any) => [t.id, t.special_effects ?? {}])
     )

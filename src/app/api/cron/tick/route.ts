@@ -2,8 +2,8 @@ import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { applyStatThresholdMoodles, checkAndDeclareWinner } from '@/lib/action-helpers'
 
-const HUNGER_PER_HOUR = 2.5
-const THIRST_PER_HOUR = 4.0
+const HUNGER_PER_HOUR = 5.0
+const THIRST_PER_HOUR = 8.0
 const TICK_MINUTES = 10
 
 export async function POST(request: Request) {
@@ -47,12 +47,24 @@ export async function POST(request: Request) {
         const hoursSinceHunger = (now - new Date(hungerSavedAt).getTime()) / 3_600_000
         const hoursSinceThirst = (now - new Date(thirstSavedAt).getTime()) / 3_600_000
 
-        // คำนวณ rate จาก traits
+        // คำนวณ rate จาก trait special_effects
         const traits: string[] = player.traits ?? []
-        const hungerRate = traits.includes('กินน้อยอยู่ได้') ? 1.25
-          : traits.includes('ขี้หิวเป็นพิเศษ') ? 5.0 : HUNGER_PER_HOUR
-        const thirstRate = traits.includes('อดน้ำเก่ง') ? 2.0
-          : traits.includes('คอแห้งตลอดเวลา') ? 8.0 : THIRST_PER_HOUR
+        // หา hunger_rate และ thirst_rate multiplier จาก trait_definitions
+        let traitHungerMult = 1.0
+        let traitThirstMult = 1.0
+        if (traits.length > 0) {
+          const { data: traitDefs } = await (supabase as any)
+            .from('trait_definitions')
+            .select('id, special_effects')
+            .in('id', traits)
+          for (const td of traitDefs ?? []) {
+            const fx = td.special_effects as Record<string, any> ?? {}
+            if (fx.hunger_rate) traitHungerMult *= fx.hunger_rate
+            if (fx.thirst_rate) traitThirstMult *= fx.thirst_rate
+          }
+        }
+        const hungerRate = HUNGER_PER_HOUR * traitHungerMult
+        const thirstRate = THIRST_PER_HOUR * traitThirstMult
 
         // คำนวณ moodle ท้องเสีย thirst multiplier
         const currentMoodles: any[] = player.moodles ?? []

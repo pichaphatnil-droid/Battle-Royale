@@ -19,13 +19,13 @@ const TOTAL_TRAIT_POINTS = 5
 const MIN_STAT = 1
 const MAX_STAT = 8
 
-// กำหนดคู่ลบที่ห้ามหยิบพร้อมกัน
+// --- ระบบตรวจสอบนิสัยที่ขัดแย้งกัน (เพิ่มเข้าไปใหม่) ---
 const TRAIT_CONFLICTS: Record<string, string[]> = {
   'กระเพาะเล็ก': ['ตะกละตะกลาม'],
   'ตะกละตะกลาม': ['กระเพาะเล็ก'],
   'ชุ่มชื้น': ['คอแห้ง'],
   'คอแห้ง': ['ชุ่มชื้น'],
-  'โชคช่วย': ['โชคร้าย', 'ซุ่มซ่าม'],
+  'โชคช่วย': ['โชคร้าย'],
   'โชคร้าย': ['โชคช่วย'],
   'แข็งแรง': ['ขี้โรค'],
   'ขี้โรค': ['แข็งแรง', 'มนุษย์เหล็กไหล'],
@@ -93,26 +93,23 @@ export default function CreateCharacterClient({ gameId, userId, availableMaleNum
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string|null>(null)
 
-  // --- Logic คำนวณแต้มและผลกระทบ (Memoized) ---
-  
+  // คำนวณแต้มนิสัย — ใช้ bonus_points จาก DB
   const getTraitCost = (id: string) => {
     const def = traits.find(t => t.id === id)
     if (!def || def.type === 'ลบ') return 0
-    return def.bonus_points ?? 2 
+    return def.bonus_points ?? 2
   }
-
   const getTraitRefund = (id: string) => {
     const def = traits.find(t => t.id === id)
     if (!def || def.type !== 'ลบ') return 0
     return def.bonus_points ?? 2
   }
-
   const traitPointsUsed = selectedTraits.reduce((acc, id) => {
     return acc + getTraitCost(id) - getTraitRefund(id)
   }, 0)
   const traitPointsLeft = TOTAL_TRAIT_POINTS - traitPointsUsed
 
-  // คำนวณ stat_effects จาก traits ทั้งหมด
+  // คำนวณ stat_effects จาก traits ทั้งหมด (เพื่อใช้แสดงผลและบันทึก)
   const traitStatBonus = useMemo(() => {
     const bonus: Record<string, number> = {}
     const allActiveTraits = [...bg.startTraits, ...selectedTraits]
@@ -126,11 +123,12 @@ export default function CreateCharacterClient({ gameId, userId, availableMaleNum
     return bonus
   }, [bg, selectedTraits, traits])
 
-  // ฟังก์ชันหาค่าสุทธิ (Base + BG + Traits)
+  // ฟังก์ชันหาค่าสุทธิ (Base + BG Bonus + Trait Effects)
   const getFinalStat = (s: Stat) => {
     return stats[s] + (bg.bonus[s] ?? 0) + (traitStatBonus[s] ?? 0)
   }
 
+  // คำนวณแต้มสถานะ
   const statPointsUsed = Object.values(stats).reduce((a, b) => a + b, 0)
   const statPointsLeft = TOTAL_STAT - statPointsUsed
 
@@ -147,7 +145,6 @@ export default function CreateCharacterClient({ gameId, userId, availableMaleNum
 
   function toggleTrait(id: string) {
     if (bg.startTraits.includes(id)) return
-    
     const def = traits.find(t => t.id === id)
     const isNeg = def?.type === 'ลบ'
     const isSelected = selectedTraits.includes(id)
@@ -157,7 +154,7 @@ export default function CreateCharacterClient({ gameId, userId, availableMaleNum
       setError(null)
       return 
     }
-    
+
     // ตรวจสอบความขัดแย้ง (Conflict)
     const conflicts = TRAIT_CONFLICTS[id] || []
     const hasConflict = conflicts.some(cId => selectedTraits.includes(cId) || bg.startTraits.includes(cId))
@@ -168,7 +165,7 @@ export default function CreateCharacterClient({ gameId, userId, availableMaleNum
       return
     }
 
-    // เช็คแต้มก่อนเลือก (ยกเว้นนิสัยเสีย)
+    // เช็คแต้มก่อนเลือก
     const cost = getTraitCost(id)
     if (!isNeg && traitPointsLeft < cost) return
     
@@ -178,23 +175,11 @@ export default function CreateCharacterClient({ gameId, userId, availableMaleNum
 
   const allTraits = [...new Set([...bg.startTraits, ...selectedTraits])]
 
-  function getStarterItems(): Array<{id:string,qty:number}> {
-    const base = [
-      { id: 'ขวดน้ำ', qty: 2 },
-      { id: 'อาหารกระป๋อง', qty: 2 },
-      { id: 'ผ้าพันแผล', qty: 1 },
-    ]
-    if (weapons.length === 0) return base
-    const shuffled = [...weapons].sort(() => Math.random() - 0.5)
-    const picked = shuffled[0]
-    return [...base, { id: picked.id, qty: 1 }]
-  }
-
   async function submit() {
     setLoading(true); setError(null)
     
-    const allTraitsForCalc = [...bg.startTraits, ...selectedTraits]
-    const maxHpBonus = allTraitsForCalc.reduce((sum, tid) => {
+    const finalTraits = [...bg.startTraits, ...selectedTraits]
+    const maxHpBonus = finalTraits.reduce((sum, tid) => {
       const def = traits.find(t => t.id === tid)
       return sum + ((def?.special_effects as any)?.max_hp_bonus ?? 0)
     }, 0)
@@ -202,24 +187,35 @@ export default function CreateCharacterClient({ gameId, userId, availableMaleNum
     const finalEnd = getFinalStat('end_stat')
     const baseMaxHp = 50 + finalEnd * 5 + maxHpBonus
 
-    const { error: err } = await (supabase as any).from('players').insert({
-      game_id: gameId, user_id: userId,
-      name: name.trim(), student_number: studentNum, gender,
-      photo_url: photoUrl || null,
-      max_hp: baseMaxHp,
-      hp:      baseMaxHp,
-      str:      getFinalStat('str'),
-      agi:      getFinalStat('agi'),
-      int:      getFinalStat('int'),
-      per:      getFinalStat('per'),
-      cha:      getFinalStat('cha'),
-      end_stat: finalEnd,
-      stl:      getFinalStat('stl'),
-      lck:      getFinalStat('lck'),
-      traits: [...bg.startTraits, ...selectedTraits], inventory: getStarterItems(), moodles: [], known_recipes: [],
-      pos_x: startPos.x, pos_y: startPos.y,
+    const baseItems = [
+      { id: 'ขวดน้ำ', qty: 2 },
+      { id: 'อาหารกระป๋อง', qty: 2 },
+      { id: 'ผ้าพันแผล', qty: 1 },
+    ]
+
+    // ใช้ RPC เพื่อสุ่มอาวุธแบบไม่ซ้ำกัน
+    const { error: err } = await (supabase as any).rpc('create_player_with_unique_weapon', {
+      p_game_id: gameId,
+      p_user_id: userId,
+      p_name: name.trim(),
+      p_student_number: studentNum,
+      p_gender: gender,
+      p_photo_url: photoUrl || null,
+      p_max_hp: baseMaxHp,
+      p_str: getFinalStat('str'),
+      p_agi: getFinalStat('agi'),
+      p_int: getFinalStat('int'),
+      p_per: getFinalStat('per'),
+      p_cha: getFinalStat('cha'),
+      p_end_stat: finalEnd,
+      p_stl: getFinalStat('stl'),
+      p_lck: getFinalStat('lck'),
+      p_traits: finalTraits,
+      p_pos_x: startPos.x,
+      p_pos_y: startPos.y,
+      p_base_items: baseItems
     })
-    
+
     if (err) {
       setError(err.message.includes('unique') ? 'หมายเลขนักเรียนนี้ถูกใช้ไปแล้ว' : 'เกิดข้อผิดพลาด: ' + err.message)
       setLoading(false); return
@@ -416,7 +412,7 @@ export default function CreateCharacterClient({ gameId, userId, availableMaleNum
               </div>
             ))}
 
-            <div style={{ display:'flex', gap:'8px', marginTop: '12px' }}>
+            <div style={{ display:'flex', gap:'8px', marginTop:'12px' }}>
               <button onClick={() => setStep(1)} style={s.backBtn}>← กลับ</button>
               <button onClick={() => setStep(3)} disabled={traitPointsLeft < 0}
                 style={{ ...s.nextBtn, flex:1, opacity: traitPointsLeft >= 0 ? 1 : 0.4 }}>

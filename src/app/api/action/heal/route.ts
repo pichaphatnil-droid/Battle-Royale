@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
-import { spendAP, logEvent, getValidPlayer, getActiveGame, applyStatThresholdMoodles } from '@/lib/action-helpers'
+import { spendAP, logEvent, getValidPlayer, getActiveGame, applyStatThresholdMoodles, getTraitEffects } from '@/lib/action-helpers'
 
 export async function POST(request: Request) {
   try {
@@ -47,8 +47,11 @@ export async function POST(request: Request) {
     // คำนวณค่าปัจจุบัน lazy จาก timestamp
     const nowMs = Date.now()
     const traits: string[] = player.traits ?? []
-    const hungerRate = traits.includes('กินน้อยอยู่ได้') ? 1.25 : traits.includes('ขี้หิวเป็นพิเศษ') ? 5.0 : 2.5
-    const thirstRate = traits.includes('อดน้ำเก่ง') ? 2.0 : traits.includes('คอแห้งตลอดเวลา') ? 8.0 : 4.0
+    const traitFxLazy = await getTraitEffects(supabase, player.traits ?? [])
+    const hungerRateMult = traitFxLazy.hunger_rate ?? 1.0
+    const thirstRateMult = traitFxLazy.thirst_rate ?? 1.0
+    const hungerRate = 5.0 * hungerRateMult
+    const thirstRate = 8.0 * thirstRateMult
     const hungerHours = (nowMs - new Date(player.hunger_updated_at ?? nowMs).getTime()) / 3_600_000
     const thirstHours = (nowMs - new Date(player.thirst_updated_at ?? nowMs).getTime()) / 3_600_000
     const currentHunger = Math.max(0, Math.round((player.hunger ?? 100) - hungerHours * hungerRate))
@@ -80,10 +83,10 @@ export async function POST(request: Request) {
       Math.random() < (effect.side_effect_chance as number)
 
     // HP — INT ช่วยเพิ่มประสิทธิภาพ
+    const traitFx = await getTraitEffects(supabase, player.traits ?? [])
     if (effect.hp) {
       const intBonus = Math.floor(player.int * 0.3)
-      const hasHerbalDoc = (player.traits ?? []).includes('หมอบ้าน')
-      const healMult = hasHerbalDoc ? 1.3 : 1.0
+      const healMult = traitFx.heal_multiplier ?? 1.0
       const healed = Math.round(((effect.hp as number) + intBonus) * healMult)
       updates.hp = Math.min(player.hp + healed, player.max_hp)
       msgs.push(`HP +${healed}`)

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
-import { spendAP, logEvent, getValidPlayer, getActiveGame, isCombatTime, applyMoodleTriggers, applyStatThresholdMoodles, checkAndDeclareWinner } from '@/lib/action-helpers'
+import { spendAP, logEvent, getValidPlayer, getActiveGame, isCombatTime, applyMoodleTriggers, applyStatThresholdMoodles, checkAndDeclareWinner, getTraitEffects } from '@/lib/action-helpers'
 
 const AP_COST_BASE = 30
 
@@ -62,18 +62,27 @@ export async function POST(request: Request) {
     }
 
     const weaponRange = weaponData.range ?? 1
+
+    // ดึง trait effects ก่อนตรวจระยะ (ranged_range_bonus อาจเพิ่มระยะ)
+    const attackerFx = await getTraitEffects(supabase, attacker.traits ?? [])
+    const targetFx = await getTraitEffects(supabase, target.traits ?? [])
+    const rangedBonus = (weaponData.type === 'firearm' || weaponData.type === 'ranged')
+      ? (attackerFx.ranged_range_bonus ?? 0) : 0
+    const effectiveRange = weaponRange + rangedBonus
+
     const dist = Math.max(
       Math.abs(attacker.pos_x - target.pos_x),
       Math.abs(attacker.pos_y - target.pos_y)
     )
-    if (dist > weaponRange)
-      return NextResponse.json({ error: `เป้าหมายอยู่ไกลเกินระยะอาวุธ (${dist}/${weaponRange} ช่อง)` }, { status: 400 })
+    if (dist > effectiveRange)
+      return NextResponse.json({ error: `เป้าหมายอยู่ไกลเกินระยะอาวุธ (${dist}/${effectiveRange} ช่อง)` }, { status: 400 })
 
     const apCost = weaponData.ap_cost ?? AP_COST_BASE
     const ap = await spendAP(supabase, attacker, apCost)
     if (!ap.ok) return NextResponse.json({ error: ap.msg }, { status: 400 })
 
     const baseDamage: number = weaponData.damage ?? 10
+
     const strBonus = weaponData.type === 'firearm' || weaponData.type === 'ranged'
       ? Math.floor(attacker.per * 0.5)
       : Math.floor(attacker.str * 0.8)
@@ -90,8 +99,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true, dodged: true, damage: 0, msg: `${target.name} หลบหนีการโจมตี` })
     }
 
-    const hasTrembleHands = (attacker.traits ?? []).includes('มือสั่น')
-    const critChance: number = Math.max(0, (weaponData.crit_chance ?? 5) + Math.floor(attacker.lck * 1.5) - (hasTrembleHands ? 5 : 0))
+    const critPenalty = attackerFx.crit_penalty ?? 0
+    const critChance: number = Math.max(0, (weaponData.crit_chance ?? 5) + Math.floor(attacker.lck * 1.5) - critPenalty)
     const isCrit = Math.random() * 100 < critChance
     const critMult = isCrit ? 1.5 : 1.0
 
@@ -111,8 +120,8 @@ export async function POST(request: Request) {
       }
     }
 
-    const hasThickSkin = (target.traits ?? []).includes('ผิวหนาเหมือหนัง')
-    if (hasThickSkin) totalDefense = Math.min(80, totalDefense + 5)
+    const traitPassiveDefense = targetFx.passive_defense ?? 0
+    if (traitPassiveDefense > 0) totalDefense = Math.min(80, totalDefense + traitPassiveDefense)
     const defenseReduction = Math.min(totalDefense, 80) / 100
     const rawDamage = Math.round((baseDamage + strBonus) * critMult)
     let damage = Math.max(1, Math.round(rawDamage * (1 - defenseReduction)))

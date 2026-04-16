@@ -138,7 +138,25 @@ export async function POST(request: Request) {
         pos_x: attacker.pos_x, pos_y: attacker.pos_y,
         data: { weapon: weaponName, damage, crit: isCrit, bleeding, stunned, hp_left: newHp, defense: totalDefense },
       }),
+      // --- เพิ่มฟีเจอร์แจ้งเตือนส่วนตัว (Personal Alert) ให้คนโดนตีรู้ตัว ---
+      (supabase as any).from('announcements').insert({
+        game_id: game_id,
+        ann_type: 'ส่วนตัว',
+        target_id: target.id,
+        message: `⚠️ คุณถูก ${attacker.name} โจมตีด้วย ${weaponName}! เสียเลือดไป ${damage} หน่วย`
+      })
     ]
+
+    // --- เพิ่มฟีเจอร์ประกาศคนตาย + ชื่อฆาตกรลงเซิร์ฟเวอร์ ---
+    if (died) {
+      writes.push(
+        (supabase as any).from('announcements').insert({
+          game_id: game_id,
+          ann_type: 'ทั่วไป',
+          message: `💀 ${target.name} ถูกสังหารอย่างโหดเหี้ยมโดย ${attacker.name}!`
+        })
+      )
+    }
 
     if (died) {
       // drop inventory — ต้องดึง grid_state ก่อนเพื่อ merge dropped_items ที่มีอยู่

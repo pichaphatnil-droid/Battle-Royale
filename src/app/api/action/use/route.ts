@@ -2,7 +2,9 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
 export async function POST(req: Request) {
-  const supabase = createClient()
+  // แก้ไขตรงนี้: เติม await หน้า createClient() เพื่อรอให้ Promise ทำงานเสร็จ
+  const supabase = await createClient()
+  
   const body = await req.json()
   const { game_id, player_id, item_id } = body
 

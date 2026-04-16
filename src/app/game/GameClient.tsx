@@ -58,7 +58,7 @@ export default function GameClient({
   const [toastAnns, setToastAnns] = useState<any[]>([]) // สำหรับ toast เท่านั้น
   const [isDesktop, setIsDesktop] = useState(true)
   const [showPlayerList, setShowPlayerList] = useState(false)
-  const [deathModal, setDeathModal] = useState<{ name: string; studentNumber?: number; gender?: string; photoUrl?: string | null; aliveCount?: number } | null>(null)
+  const [deathModal, setDeathModal] = useState<{ name: string; killer?: string; studentNumber?: number; gender?: string; photoUrl?: string | null; aliveCount?: number } | null>(null)
   const [winnerModal, setWinnerModal] = useState<{ name: string, killCount: number, studentNumber: number } | null>(null)
   const [selectedPlayerInfo, setSelectedPlayerInfo] = useState<Player | null>(null)
   const [myAlliance, setMyAlliance] = useState(initialMyAlliance)
@@ -80,6 +80,16 @@ export default function GameClient({
   const isMovingRef = useRef(false) // ป้องกัน Realtime override ระหว่าง move
 
   const [timeLeft, setTimeLeft] = useState('')
+
+  // ── Auto Close Toasts ─────────────────────────────────────
+  useEffect(() => {
+    if (toastAnns.length > 0) {
+      const timer = setTimeout(() => {
+        setToastAnns(prev => prev.slice(1))
+      }, 5000)
+      return () => clearTimeout(timer)
+    }
+  }, [toastAnns])
 
   // ── คำนวณค่าหลัง mount (หลีกเลี่ยง hydration mismatch) ─────
   useEffect(() => {
@@ -195,8 +205,16 @@ export default function GameClient({
           setAllPlayers(prev => {
             const deadPlayer = prev.find((p: any) => p.id === (ev.target_id ?? ev.actor_id))
             const aliveCount = prev.filter((p: any) => p.is_alive && p.id !== (ev.target_id ?? ev.actor_id)).length
+            
+            let killerName = undefined;
+            if (ev.actor_id && ev.actor_id !== (ev.target_id ?? ev.actor_id)) {
+              const killer = prev.find((p: any) => p.id === ev.actor_id);
+              if (killer) killerName = killer.name;
+            }
+
             setDeathModal({
               name: deadPlayer?.name ?? ev.data?.name ?? 'ผู้เล่น',
+              killer: killerName,
               studentNumber: deadPlayer?.student_number,
               gender: deadPlayer?.gender,
               photoUrl: deadPlayer?.photo_url,
@@ -258,8 +276,13 @@ export default function GameClient({
         const key = `dismissed_ann_${game.id}`
         const dismissed: string[] = JSON.parse(localStorage.getItem(key) ?? '[]')
         setAnnouncements(prev => [ann, ...prev].slice(0, 20))
-        if (!dismissed.includes(ann.id))
+        if (!dismissed.includes(ann.id)) {
           setToastAnns(prev => [ann, ...prev].slice(0, 10))
+          // ทำให้มือถือสั่นถ้าประกาศส่วนตัว
+          if (ann.ann_type === 'ส่วนตัว' && typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+            navigator.vibrate([200, 100, 200])
+          }
+        }
       })
       .subscribe()
 
@@ -555,6 +578,17 @@ export default function GameClient({
     notify(data.msg)
   }
 
+  async function doUseItem(item_id: string) {
+    if (!myPlayer.is_alive) return
+    const res = await fetch('/api/action/use', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ game_id: game.id, player_id: myPlayer.id, item_id }),
+    })
+    const data = await res.json()
+    if (!data.success) { notify(data.error, false); return }
+    notify(data.message)
+  }
+
   async function doAttack(target_player_id: string, weapon_id?: string) {
     if (!myPlayer.is_alive) return
     const res = await fetch('/api/action/attack', {
@@ -770,9 +804,15 @@ export default function GameClient({
               เสียชีวิต
             </div>
 
+            {deathModal.killer && (
+              <div style={{ fontSize:'11px', color:'var(--text-secondary)', borderTop:'1px solid var(--border)', paddingTop:'8px', marginBottom: '8px' }}>
+                ถูกสังหารโดย <span style={{ color:'var(--red-bright)' }}>{deathModal.killer}</span>
+              </div>
+            )}
+
             {/* เหลือกี่คน */}
             {deathModal.aliveCount !== undefined && (
-              <div style={{ fontSize:'11px', color:'var(--text-secondary)', fontFamily:'var(--font-mono)', borderTop:'1px solid var(--border)', paddingTop:'8px' }}>
+              <div style={{ fontSize:'11px', color:'var(--text-secondary)', fontFamily:'var(--font-mono)', borderTop: !deathModal.killer ? '1px solid var(--border)' : 'none', paddingTop: !deathModal.killer ? '8px' : '0' }}>
                 เหลือผู้รอดชีวิต {deathModal.aliveCount} คน
               </div>
             )}
@@ -880,6 +920,30 @@ export default function GameClient({
                 <span style={{ marginLeft:'8px', color:'var(--green-bright)', fontSize:'11px' }}>● พันธมิตร</span>
               )}
             </div>
+
+            {/* โชว์อาวุธที่ถืออยู่ */}
+            {(() => {
+              const eqWeapons = (selectedPlayerInfo.inventory || []).filter((invItem: any) => {
+                const def = itemDefs.find(d => d.id === invItem.id);
+                return def?.category === 'อาวุธ';
+              });
+              return (
+                <div style={{ marginBottom: '10px', padding: '8px', background: 'var(--bg-tertiary)', border: '1px solid var(--border)' }}>
+                  <div style={{ fontSize:'11px', color:'var(--text-gold)', letterSpacing:'0.05em', marginBottom:'4px' }}>อาวุธที่พกพา</div>
+                  {eqWeapons.length > 0 ? (
+                    <div style={{ display:'flex', flexWrap:'wrap', gap:'4px' }}>
+                      {eqWeapons.map((w: any) => (
+                        <span key={w.id} style={{ fontSize:'11px', padding:'2px 6px', background:'rgba(139,0,0,0.15)', border:'1px solid var(--red-bright)', color:'var(--red-bright)' }}>
+                          ⚔ {w.id}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ fontSize:'11px', color:'var(--text-secondary)' }}>มือเปล่า / ไม่พบอาวุธ</div>
+                  )}
+                </div>
+              )
+            })()}
 
             {/* Traits */}
             {selectedPlayerInfo.traits && selectedPlayerInfo.traits.length > 0 && (
@@ -1345,7 +1409,7 @@ export default function GameClient({
 
           {/* Player info */}
           <div style={{ display: (isDesktop ? rightTab === 'stats' : (mobileTab !== 'ally')) ? 'flex' : 'none', flexDirection:'column', overflow:'hidden', flex:1 }}>
-            <PlayerPanel myPlayer={myPlayer} ap={ap} hunger={hunger} thirst={thirst} hpClass={hpClass} hpPct={hpPct} traits={traits} moodleDefs={moodleDefs} itemDefs={itemDefs} onHeal={doHeal} onDrop={doDrop} onCraft={doCraft} recipes={recipes} invSort={invSort} setInvSort={setInvSort} />
+            <PlayerPanel myPlayer={myPlayer} ap={ap} hunger={hunger} thirst={thirst} hpClass={hpClass} hpPct={hpPct} traits={traits} moodleDefs={moodleDefs} itemDefs={itemDefs} onHeal={doHeal} onDrop={doDrop} onCraft={doCraft} onUseItem={doUseItem} recipes={recipes} invSort={invSort} setInvSort={setInvSort} />
           </div>
 
           {/* ── Alliance Panel ── */}
@@ -1466,11 +1530,11 @@ function MapPanel({ grids, gridStates, allPlayers, myPlayer, visibleCells, selec
   const gsMap = new Map(gridStates.map(g => [`${g.x},${g.y}`, g]))
 
   const TERRAIN_COLOR: Record<string, string> = {
-    'ภูเขา':    '#6B5744',
-    'หาด':      '#A08C4A',
-    'ป่า':      '#1A6B1A',
+    'ภูเขา':   '#6B5744',
+    'หาด':     '#A08C4A',
+    'ป่า':     '#1A6B1A',
     'โรงเรียน': '#3A3A7A',
-    'เมือง':    '#7A4A4A',
+    'เมือง':   '#7A4A4A',
     'หนองน้ำ':  '#1A5C3A',
     'ประภาคาร': '#8A8A30',
     'ท่าเรือ':  '#2A5A7A',
@@ -1723,12 +1787,13 @@ function MapPanel({ grids, gridStates, allPlayers, myPlayer, visibleCells, selec
 }
 
 // ── PLAYER PANEL ─────────────────────────────────────────────
-function PlayerPanel({ myPlayer, ap, hunger, thirst, hpClass, hpPct, traits, moodleDefs, itemDefs, onHeal, onDrop, onCraft, recipes, invSort, setInvSort }: {
+function PlayerPanel({ myPlayer, ap, hunger, thirst, hpClass, hpPct, traits, moodleDefs, itemDefs, onHeal, onDrop, onCraft, onUseItem, recipes, invSort, setInvSort }: {
   myPlayer: Player; ap: number; hunger: number; thirst: number; hpClass: string; hpPct: number
   traits: TraitDefinition[]; moodleDefs: MoodleDefinition[]; itemDefs: ItemDefinition[]
   onHeal: (item_id: string) => void
   onDrop: (item_id: string, qty: number) => void
   onCraft: (recipe_id: string) => void
+  onUseItem: (item_id: string) => void
   recipes: CraftRecipe[]
   invSort: 'default'|'name'|'category'|'weight'
   setInvSort: (s: 'default'|'name'|'category'|'weight') => void
@@ -1885,6 +1950,11 @@ function PlayerPanel({ myPlayer, ap, hunger, thirst, hpClass, hpPct, traits, moo
           const HEAL_IDS: string[] = itemDefs
             .filter(d => d.data && (d.data.hp || d.data.hunger || d.data.thirst || d.data.removes_moodle || d.data.ap_bonus || d.data.int_bonus))
             .map(d => d.id)
+            
+          const USE_EQUIP_IDS: string[] = itemDefs
+            .filter(d => d.category === 'อุปกรณ์' && d.data && ((d.data as any).ap_bonus || (d.data as any).stat_bonus))
+            .map(d => d.id)
+
           const totalWeight = myPlayer.inventory.reduce((sum, item) => {
             const def = itemDefs.find(d => d.id === item.id)
             return sum + ((def?.weight ?? 0) * item.qty)
@@ -1925,6 +1995,8 @@ function PlayerPanel({ myPlayer, ap, hunger, thirst, hpClass, hpPct, traits, moo
                 const def = itemDefs.find(d => d.id === item.id)
                 const isWeapon = def?.category === 'อาวุธ'
                 const canHeal = HEAL_IDS.includes(item.id)
+                const canUseEquip = USE_EQUIP_IDS.includes(item.id)
+                
                 return (
                   <div key={i} style={{ display:'flex', alignItems:'flex-start', padding:'6px 8px', background:'var(--bg-tertiary)', border:`1px solid ${isWeapon ? 'rgba(139,0,0,0.4)' : 'var(--border)'}`, fontSize:'13px', gap:'8px' }}>
                     {/* รูปภาพ */}
@@ -1967,6 +2039,13 @@ function PlayerPanel({ myPlayer, ap, hunger, thirst, hpClass, hpPct, traits, moo
                         <button onClick={() => onHeal(item.id)} style={{
                           padding:'2px 7px', background:'rgba(45,90,39,0.3)',
                           border:'1px solid var(--green-bright)', color:'var(--green-bright)',
+                          fontSize:'11px', cursor:'pointer', fontFamily:'var(--font-body)',
+                        }}>ใช้</button>
+                      )}
+                      {canUseEquip && (
+                        <button onClick={() => onUseItem(item.id)} style={{
+                          padding:'2px 7px', background:'rgba(45,60,100,0.3)',
+                          border:'1px solid #5A80CC', color:'#5A80CC',
                           fontSize:'11px', cursor:'pointer', fontFamily:'var(--font-body)',
                         }}>ใช้</button>
                       )}
@@ -2127,6 +2206,7 @@ function EventRow({ event, allPlayers, myPlayer, allyIds }: {
         const name = targetName || actorName
         if (cause === 'ปลอกคอระเบิด') return `💀 ${name} ถูกระเบิดปลอกคอ`
         if (cause === 'สภาพแวดล้อม') return `💀 ${name} เสียชีวิตจากสภาพแวดล้อม`
+        if (event.actor_id && event.actor_id !== event.target_id) return `💀 ${name} ถูกสังหารโดย ${actorName}`
         return `💀 ${name} เสียชีวิต`
       }
       case 'ทรยศ': return `⚔ ${actorName} ทรยศกลุ่ม`
